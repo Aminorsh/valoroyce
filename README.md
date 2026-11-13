@@ -73,6 +73,36 @@ uv run valoroyce           # 启动
 - 程序只负责复制，不会替你往游戏里打字或发送。
 - 机器翻译对简短直接的句子效果最好（「壹决残血，在B长廊」），俏皮话和网络梗容易翻歪。
 
+#### 想翻得更地道：给「发消息」单独换一个模型（可选）
+
+默认情况下发消息和字幕共用同一个本地小模型，完全离线，但口语和梗翻得比较生硬。可以只给「发消息」换一个更强的模型，**字幕不受影响，始终在本地翻译**。在 `config.toml` 里加一段即可，两种方式任选：
+
+**在线服务**（任何兼容 OpenAI 接口的服务都行，下面以 DeepSeek 为例，需要自己申请 API key）：
+
+```toml
+[compose]
+backend = "openai"
+base_url = "https://api.deepseek.com"
+model = "deepseek-flash"
+api_key = "sk-你的key"
+extra_body = { thinking = { type = "disabled" } }   # 关掉“思考”，否则又慢又可能返回空
+```
+
+- 只有你在输入框里打的那句话会发给这个服务；队友的语音、字幕都不会。
+- 需要联网，按服务商的价格计费（一句话很短，花费极少）。每句大约 1 秒。
+- 在线服务可能拒绝翻译某些句子（比如涉及政治的内容或很重的脏话）。遇到拒绝、断网或 key 失效时，这一句会**自动改用本地的字幕模型**翻译，输入框下方会提示。
+- `config.toml` 不会被提交到 git，但也别把带 key 的配置文件发给别人。
+
+**本地的第二个模型**（仍然完全离线）：把一个 GGUF 格式的聊天模型（例如 Qwen3.5-4B 的 Q4_K_M 版，约 2.7 GB）放进 `models` 文件夹，然后：
+
+```toml
+[compose]
+backend = "llama"
+model_file = "Qwen3.5-4B-Q4_K_M.gguf"
+```
+
+它会在第一次打开输入框时才加载。语气比默认模型自然，但准确度不如在线的大模型，而且会多占内存或显存。
+
 ### 显卡还是 CPU？
 
 翻译模型默认放在显卡上跑，出字幕更快，但它会和游戏共用显卡（约占 1.5 GB 显存）。如果开着字幕时游戏掉帧或卡顿，在托盘菜单把「翻译运行在」切到 **CPU** 即可；CPU 模式下短句定稿大约 1 秒。
@@ -99,6 +129,7 @@ uv run valoroyce           # 启动
 | 翻译不用显卡 | `[translate] gpu = false`（或托盘菜单切换） |
 | 没有显卡，CPU 吃紧 | `[translate] partials = false`（只翻译说完的整句） |
 | 发消息的默认语言、快捷键 | `[compose] target = "en"`、`hotkey = "ctrl+shift+f8"`（留空则不注册快捷键） |
+| 发消息用更强的模型（在线或本地） | `[compose] backend = "openai"` 或 `"llama"`，见上文「想翻得更地道」 |
 | 用自己的模型服务（Ollama / LM Studio 等） | `[translate] backend = "openai"`，并设置 `base_url`、`model`、`prompt = "generic"` |
 | 不要翻译模型，只替换术语 | `[translate] backend = "none"` |
 

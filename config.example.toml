@@ -50,7 +50,12 @@ prompt = "hy-mt"
 partials = true
 max_tokens = 96
 timeout = 8.0
+# Extra fields added to every request, for servers that need them,
+# e.g. { thinking = { type = "disabled" } } to switch off a model's thinking phase.
+extra_body = {}
 # backend = "llama" only.
+# Caption model file inside models_dir. "" = the bundled one.
+model_file = ""
 # Run translation on the graphics card: faster, but shares the card with the game.
 # Set false if the game stutters. Also switchable from the tray menu.
 # 翻译模型是否用显卡跑：更快，但会和游戏抢显卡；游戏掉帧就改成 false（托盘菜单里也能切换）
@@ -90,3 +95,22 @@ target = "ja"
 # System-wide shortcut that opens the message box (Windows). "" = none.
 # 打开发消息窗口的全局快捷键（Windows）；留空则不注册
 hotkey = "ctrl+alt+t"
+# Which model writes your messages. Captions are not affected.
+#   ""        the caption model (nothing extra to set up)
+#   "llama"   a second local model: model_file (a .gguf inside models_dir)
+#   "openai"  a server or online service that speaks OpenAI's API: base_url, model, api_key.
+#             An online service receives the text you type, nothing else.
+# 发消息用哪个模型（不影响字幕）：留空 = 和字幕共用；"llama" = 本地第二个模型；
+# "openai" = 兼容 OpenAI 接口的服务（在线服务只会收到你输入的那句话）
+backend = ""
+model_file = ""
+base_url = "http://127.0.0.1:8178"
+# The key can also be set as the environment variable VALOROYCE_COMPOSE_API_KEY.
+api_key = ""
+model = ""
+# "generic" for any chat model, "hy-mt" for Hy-MT models.
+prompt = "generic"
+timeout = 30.0
+# Extra request fields, as in [translate]. A model that "thinks" before answering
+# needs that switched off here, or replies come back empty.
+extra_body = {}

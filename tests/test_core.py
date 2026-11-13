@@ -181,3 +181,87 @@ def test_glossary_only_backend_can_compose():
     from valoroyce.translate import GlossaryTranslator
 
     assert GlossaryTranslator(Glossary.load()).compose("壹决在B长廊", "en") == "Iso在B long"
+
+
+def test_model_file_selection(tmp_path):
+    from valoroyce.translate import CAPTION_MODEL, find_gguf, make_compose_translator
+
+    with pytest.raises(FileNotFoundError):
+        find_gguf(tmp_path)
+    (tmp_path / "zzz.gguf").write_text("")
+    assert find_gguf(tmp_path).name == "zzz.gguf"          # the only one there
+    (tmp_path / "Aaa-big.gguf").write_text("")
+    (tmp_path / CAPTION_MODEL).write_text("")
+    assert find_gguf(tmp_path).name == CAPTION_MODEL       # not "whichever sorts first"
+    assert find_gguf(tmp_path, "Aaa-big.gguf").name == "Aaa-big.gguf"
+    with pytest.raises(FileNotFoundError):
+        find_gguf(tmp_path, "missing.gguf")
+    # No second model configured: callers fall back to the caption translator.
+    assert make_compose_translator(Config(), Glossary.load(), tmp_path) is None
+
+
+def test_messages_can_use_their_own_backend(tmp_path, monkeypatch):
+    from valoroyce.translate import ChatTranslator, make_compose_translator
+
+    g = Glossary.load()
+    cfg = Config()
+    cfg.compose.backend = "openai"
+    cfg.compose.base_url = "https://api.example.com"
+    cfg.compose.model = "some-chat-model"
+    monkeypatch.setenv("VALOROYCE_COMPOSE_API_KEY", "from-env")
+    t = make_compose_translator(cfg, g, tmp_path)
+    assert type(t) is ChatTranslator  # nothing is started locally
+    assert t.url == "https://api.example.com/v1/chat/completions"
+    assert (t.cfg.api_key, t.cfg.model, t.cfg.prompt) == ("from-env", "some-chat-model", "generic")
+    # The caption settings are untouched: captions stay on the local model.
+    assert (cfg.translate.backend, cfg.translate.api_key) == ("llama", "")
+
+    cfg.compose.api_key = "from-file"  # the config file wins over the environment
+    assert make_compose_translator(cfg, g, tmp_path).cfg.api_key == "from-file"
+
+    cfg.compose.backend = "llama"  # a second local model needs a file and its own port
+    with pytest.raises(ValueError, match="model_file"):
+        make_compose_translator(cfg, g, tmp_path)
+    cfg.compose.model_file, cfg.compose.base_url = "big.gguf", cfg.translate.base_url
+    with pytest.raises(ValueError, match="port"):
+        make_compose_translator(cfg, g, tmp_path)
+    cfg.compose.backend = "cloud"
+    with pytest.raises(ValueError, match="compose.backend"):
+        make_compose_translator(cfg, g, tmp_path)
+
+
+def test_caption_model_takes_over_messages_the_other_model_fails_on(tmp_path):
+    from valoroyce.translate import (DECLINED, ComposeWithFallback, Declined, GlossaryTranslator,
+                                     build_messages, make_compose_translator)
+
+    g = Glossary.load()
+    cfg = Config()
+    cfg.compose.backend, cfg.compose.base_url = "openai", "https://api.example.com"
+    local = GlossaryTranslator(g)
+    t = make_compose_translator(cfg, g, tmp_path, fallback=lambda: local)
+    assert isinstance(t, ComposeWithFallback) and t.own.may_decline
+
+    # The hosted model is told how to decline, and only when something can take over.
+    asked = build_messages("你好", [], t.own.cfg, target="日语", may_decline=True)
+    assert DECLINED in asked[0]["content"]
+    assert DECLINED not in build_messages("你好", [], t.own.cfg, target="日语")[0]["content"]
+
+    replies = iter(["Iso is B long", DECLINED, DECLINED + "\n(I cannot translate this)", ""])
+    t.own._chat = lambda messages: next(replies).split("\n")[0]
+    assert t.compose("壹决在B长廊", "en") == "Iso is B long" and not t.fell_back
+    for _ in range(3):  # declined twice, then an empty reply: the caption translator answers
+        assert t.compose("壹决在B长廊", "en") == "Iso在B long" and t.fell_back
+
+    def unreachable(messages):
+        raise RuntimeError("cannot reach api.example.com")
+    t.own._chat = unreachable
+    assert t.compose("壹决在B长廊", "en") == "Iso在B long" and "cannot reach" in t.fell_back
+
+    # Nothing to fall back to (captions still loading): the failure is reported.
+    alone = make_compose_translator(cfg, g, tmp_path, fallback=lambda: None)
+    alone.own._chat = unreachable
+    with pytest.raises(RuntimeError, match="cannot reach"):
+        alone.compose("你好", "ja")
+    alone.own._chat = lambda messages: ""
+    with pytest.raises(Declined):
+        alone.compose("你好", "ja")

@@ -27,7 +27,7 @@ from .config import Config, OverlayConfig
 from .glossary import Glossary
 from .hotkey import GlobalHotkey
 from .pipeline import Caption, Pipeline
-from .translate import make_translator
+from .translate import make_compose_translator, make_translator
 
 PAD_X, PAD_Y, GAP = 14, 6, 6
 FONT_SIZES = [("小", 16), ("中", 22), ("大", 28), ("特大", 36)]
@@ -209,11 +209,15 @@ class Controller(QObject):
         self._reported: Pipeline | None = None  # pipeline whose error was already shown
         self._welcomed = False
         self.from_file = cfg.audio.source == "file"
-        self.compose = ComposeWindow(lambda: self.translator, cfg.compose.target)
+        # Optional separate model for outgoing messages, loaded on first use.
+        self._big = None
+        self._big_wanted = bool(cfg.compose.backend)
+        self._big_loading = False
+        self.compose = ComposeWindow(self._compose_translator, cfg.compose.target)
         self.hotkey = None
         if cfg.compose.hotkey:
             try:
-                self.hotkey = GlobalHotkey(app, cfg.compose.hotkey, self.compose.open)
+                self.hotkey = GlobalHotkey(app, cfg.compose.hotkey, self.open_compose)
             except Exception as e:  # a shortcut is a convenience; never block start-up
                 print(f"warning: shortcut not available: {e}", file=sys.stderr)
 
@@ -242,7 +246,7 @@ class Controller(QObject):
         if self.hotkey and self.hotkey.registered:
             label += "\t" + self.cfg.compose.hotkey.title()
         send = QAction(label, m)
-        send.triggered.connect(self.compose.open)
+        send.triggered.connect(self.open_compose)
         m.addAction(send)
         m.addSeparator()
 
@@ -301,6 +305,30 @@ class Controller(QObject):
             a = QAction(name, menu, checkable=True, checked=chosen)
             a.triggered.connect(lambda _=False, n=name: self._set_device(n))
             menu.addAction(a)
+
+    def open_compose(self) -> None:
+        self._compose_translator()  # start loading the message model, if any
+        self.compose.open()
+
+    def _compose_translator(self):
+        """Translator for outgoing messages; None while their own model loads."""
+        if not self._big_wanted:
+            return self.translator
+        if self._big is None and not self._big_loading:
+            self._big_loading = True
+            threading.Thread(target=self._load_big, daemon=True).start()
+        return self._big
+
+    def _load_big(self) -> None:
+        try:
+            self._big = make_compose_translator(self.cfg, self.glossary, self.cfg.models_path,
+                                                fallback=lambda: self.translator)
+        except Exception as e:
+            # Messages still work, on the caption model.
+            print(f"warning: message model not available ({e}); using the caption model",
+                  file=sys.stderr, flush=True)
+            self._big_wanted = False
+        self._big_loading = False
 
     def _on_tray_click(self, reason) -> None:
         # Left click opens the same menu as right click.
@@ -425,6 +453,8 @@ class Controller(QObject):
     def shutdown(self) -> None:
         self.tray.hide()
         self.compose.hide()
+        if self._big:
+            self._big.close()
         if self.hotkey:
             self.hotkey.release()
         if self.pipeline:

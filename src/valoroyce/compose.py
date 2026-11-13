@@ -30,7 +30,7 @@ QRadioButton { color: #D5DBE1; font-size: 13px; spacing: 6px; }
 
 
 class ComposeWindow(QWidget):
-    _finished = Signal(int, str, str)  # request number, result, error
+    _finished = Signal(int, str, str, bool)  # request number, result, error, used the fallback
 
     def __init__(self, get_translator, target: str = "ja"):
         super().__init__()
@@ -106,13 +106,14 @@ class ComposeWindow(QWidget):
 
         def work() -> None:
             try:
-                self._finished.emit(number, translator.compose(text, target), "")
+                result = translator.compose(text, target)
+                self._finished.emit(number, result, "", bool(getattr(translator, "fell_back", "")))
             except Exception as e:
-                self._finished.emit(number, "", str(e))
+                self._finished.emit(number, "", str(e), False)
 
         threading.Thread(target=work, daemon=True).start()
 
-    def _on_finished(self, number: int, result: str, error: str) -> None:
+    def _on_finished(self, number: int, result: str, error: str, fell_back: bool = False) -> None:
         if number != self._request:
             return  # an older request; a newer one is on its way
         if error or not result:
@@ -120,5 +121,8 @@ class ComposeWindow(QWidget):
             return
         self.result.setText(result)
         QGuiApplication.clipboard().setText(result)
-        self.status.setText("已复制 · 回到游戏聊天框按 Ctrl+V 粘贴")
+        if fell_back:  # the message model failed or declined; the caption model did this one
+            self.status.setText("已复制 · 这句改由字幕模型翻译（发消息的模型不可用或没有翻译）")
+        else:
+            self.status.setText("已复制 · 回到游戏聊天框按 Ctrl+V 粘贴")
         self.input.selectAll()

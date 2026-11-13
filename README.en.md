@@ -76,6 +76,36 @@ To type to your team: choose "发消息（中文 → 日语 / 英语）…" in t
 - The program only copies. It never types into the game or sends anything for you.
 - Machine translation does best with short, direct sentences. Jokes and slang tend to go wrong.
 
+#### Better messages: a separate model for the message box (optional)
+
+By default, messages use the same small local model as the captions: fully offline, but stiff with casual speech and slang. You can give the message box a stronger model of its own. **Captions are not affected and are always translated locally.** Add one block to `config.toml`:
+
+**An online service** (anything that speaks OpenAI's API; DeepSeek shown here, you need your own API key):
+
+```toml
+[compose]
+backend = "openai"
+base_url = "https://api.deepseek.com"
+model = "deepseek-flash"
+api_key = "sk-your-key"
+extra_body = { thinking = { type = "disabled" } }   # no "thinking": it is slow and can return nothing
+```
+
+- Only the sentence you type into the box is sent to the service. Teammates' voices and the captions never are.
+- It needs a network connection and is billed by the provider (a message is a few dozen tokens). About one second per message.
+- Online services may decline some sentences (political content, heavy profanity). When the service declines, is unreachable, or rejects the key, that one message is **translated by the local caption model instead**, and the box says so.
+- `config.toml` is ignored by git, but do not share a config file that contains your key. The key can also be given as the environment variable `VALOROYCE_COMPOSE_API_KEY`.
+
+**A second local model** (still fully offline): put a GGUF chat model (for example Qwen3.5-4B, Q4_K_M, about 2.7 GB) into the `models` folder, then:
+
+```toml
+[compose]
+backend = "llama"
+model_file = "Qwen3.5-4B-Q4_K_M.gguf"
+```
+
+It is loaded the first time the message box opens. Its tone is more natural than the default model's, but it is less accurate than a large online model and needs extra RAM or VRAM.
+
 ### GPU or CPU?
 
 The translation model runs on the GPU by default, which gives faster captions but shares the card with the game (about 1.5 GB of VRAM). If the game stutters with captions on, switch "翻译运行在" to CPU. On CPU, a short line is finalised in roughly a second.
@@ -102,6 +132,7 @@ Copy `config.example.toml` to `config.toml` and edit. Every key is optional. The
 | Keep translation off the GPU | `[translate] gpu = false` (or use the tray menu) |
 | No GPU and a busy CPU | `[translate] partials = false` (translate finished sentences only) |
 | Default language and shortcut for messages | `[compose] target = "en"`, `hotkey = "ctrl+shift+f8"` (empty = no shortcut) |
+| A stronger model for messages (online or local) | `[compose] backend = "openai"` or `"llama"`, see "Better messages" above |
 | Use your own model server (Ollama, LM Studio, ...) | `[translate] backend = "openai"`, plus `base_url`, `model`, `prompt = "generic"` |
 | No translation model, glossary substitution only | `[translate] backend = "none"` |
 

@@ -109,18 +109,28 @@ def cmd_translate(args) -> int:
 
 def cmd_say(args) -> int:
     """Chinese in, Japanese or English out: the message box without the window."""
-    from .translate import make_translator
+    from .translate import make_compose_translator, make_translator
 
     cfg, glossary = _load(args)
-    if args.backend:
-        cfg.translate.backend = args.backend
-    translator = make_translator(cfg.translate, glossary, cfg.models_path)
+    if args.backend:  # an explicit choice on the command line wins over [compose]
+        cfg.translate.backend, cfg.compose.backend = args.backend, ""
+    started = []  # the caption translator, once something needs it
+
+    def caption_translator():
+        if not started:
+            started.append(make_translator(cfg.translate, glossary, cfg.models_path))
+        return started[0]
+
+    translator = (make_compose_translator(cfg, glossary, cfg.models_path, caption_translator)
+                  or caption_translator())
     try:
         lines = args.text or [line.strip() for line in sys.stdin if line.strip()]
         for line in lines:
             print(translator.compose(line, args.to or cfg.compose.target))
     finally:
         translator.close()
+        if started and started[0] is not translator:
+            started[0].close()
     return 0
 
 

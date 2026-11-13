@@ -68,7 +68,12 @@ class TranslateConfig:
     partials: bool = True
     max_tokens: int = 96
     timeout: float = 8.0
+    # Extra fields added to every request, for servers that need them, e.g.
+    # {thinking = {type = "disabled"}} to switch off a model's thinking phase.
+    extra_body: dict = field(default_factory=dict)
     # backend = "llama" only:
+    # The caption model's file name inside models_dir. "" = the bundled one.
+    model_file: str = ""
     # Run the translation model on the graphics card. Faster, but it shares the
     # card with the game; turn off if the game stutters.
     gpu: bool = True
@@ -110,6 +115,25 @@ class ComposeConfig:
     target: str = "ja"
     # System-wide shortcut that opens the message box (Windows). "" = none.
     hotkey: str = "ctrl+alt+t"
+    # Which model writes your messages. Captions are not affected.
+    #   ""        the caption model (nothing extra to set up)
+    #   "llama"   a second local model, `model_file` inside models_dir, started
+    #             the first time the message box is opened and served at base_url
+    #   "openai"  a server or online service that speaks OpenAI's API at base_url.
+    #             An online service receives the text you type, nothing else.
+    backend: str = ""
+    model_file: str = ""
+    base_url: str = "http://127.0.0.1:8178"
+    # backend = "openai": the key and the model name the service expects. The
+    # key may also come from the environment variable VALOROYCE_COMPOSE_API_KEY.
+    api_key: str = ""
+    model: str = ""
+    # "generic": plain instructions for any chat model. "hy-mt": Hy-MT's format.
+    prompt: str = "generic"
+    timeout: float = 30.0
+    # Extra request fields, as in [translate]. A model that "thinks" before it
+    # answers must have that switched off here, or replies come back empty.
+    extra_body: dict = field(default_factory=dict)
 
 
 @dataclass
