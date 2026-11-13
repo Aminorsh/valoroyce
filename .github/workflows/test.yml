@@ -1,0 +1,21 @@
+name: tests
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --extra app --extra dev
+      # Models are not downloaded here, so the end-to-end tests skip themselves.
+      - run: uv run pytest -v
+      - name: Import every module (catches Windows-only import errors)
+        if: runner.os == 'Windows'
+        run: uv run python -c "import valoroyce.cli, valoroyce.audio, valoroyce.overlay, valoroyce.compose, valoroyce.hotkey, valoroyce.setup; import soundcard; print('imports ok')"

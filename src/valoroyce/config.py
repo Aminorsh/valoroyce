@@ -103,6 +103,16 @@ class OverlayConfig:
 
 
 @dataclass
+class ComposeConfig:
+    """Typing Chinese and getting a message for teammates."""
+
+    # Language your Chinese is translated into: "ja" or "en".
+    target: str = "ja"
+    # System-wide shortcut that opens the message box (Windows). "" = none.
+    hotkey: str = "ctrl+alt+t"
+
+
+@dataclass
 class Config:
     # Where models and the llama.cpp binary live.
     models_dir: str = "models"
@@ -112,6 +122,7 @@ class Config:
     translate: TranslateConfig = field(default_factory=TranslateConfig)
     glossary: GlossaryConfig = field(default_factory=GlossaryConfig)
     overlay: OverlayConfig = field(default_factory=OverlayConfig)
+    compose: ComposeConfig = field(default_factory=ComposeConfig)
 
     @property
     def models_path(self) -> Path:

@@ -44,3 +44,5 @@ def apply(cfg: Config) -> None:
         cfg.translate.gpu = s["gpu"]
     if isinstance(s.get("device"), str):
         cfg.audio.device = s["device"]
+    if s.get("compose_target") in ("ja", "en"):
+        cfg.compose.target = s["compose_target"]

@@ -60,6 +60,10 @@ class Term:
     en: list[str] = field(default_factory=list)
     ja: list[str] = field(default_factory=list)
     mishear: list[str] = field(default_factory=list)
+    # Other ways players write it in Chinese (nicknames, shorthand), used only
+    # when translating outgoing messages. A one-character alias counts only
+    # after a site letter ("A大") or after a bracketed lead-in ("(有)大").
+    zh_alias: list[str] = field(default_factory=list)
 
     @property
     def forced(self) -> bool:
@@ -84,6 +88,8 @@ class Hit:
 # A site letter directly before a place word belongs to it: without this the
 # translator is told "メイン = 主道" and drops the "A" from "Aメイン".
 _SITE = re.compile(r"(?<![A-Za-z])([A-Ca-c]) ?$")
+# "(有)大": the alias 大, valid only right after 有.
+_LEAD_IN = re.compile(r"\((.+)\)(.+)")
 
 
 def _latin_pattern(spelling: str) -> re.Pattern[str]:
@@ -212,6 +218,53 @@ class Glossary:
                 if n:
                     break
         return translation
+
+    # -- the other direction: Chinese the player typed -> ja / en -------------
+
+    def outgoing(self, text: str, lang: str) -> tuple[str, list[tuple[str, str]]]:
+        """Prepare typed Chinese for translation into `lang`.
+
+        Returns the text with nicknames and shorthand spelled out as the
+        official term ("保安有大" -> "零有大招"), and the (Chinese term, name in
+        `lang`) pairs for the translator. Spelling shorthand out works better
+        than hinting it: a model told that "大" means "ult" mostly ignores it.
+        """
+        written = [(zh, t) for t in self.terms for zh in (t.zh, *t.zh_alias)]
+        found: list[tuple[int, int, Term, str]] = []  # replace [start, end) with term.zh
+        folded = text.lower()  # same length as text: aliases like "AK" match "ak"
+        taken: list[tuple[int, int]] = []
+        # Longest first, measured without the bracketed lead-in: "大狙" must
+        # be tried before the 大 of "(有)大".
+        def split(alias: str) -> tuple[str, str]:
+            m = _LEAD_IN.fullmatch(alias)
+            return (m.group(1), m.group(2)) if m else ("", alias)
+
+        for (lead, zh), term in sorted(((split(w), t) for w, t in written),
+                                       key=lambda w: -len(w[0][1])):
+            pos = 0
+            while (at := folded.find((lead + zh).lower(), pos)) >= 0:
+                pos = at + 1
+                start, end = at + len(lead), at + len(lead) + len(zh)
+                if zh.isascii() and (text[max(start - 1, 0):start].isascii() and text[max(start - 1, 0):start].isalnum()
+                                     or text[end:end + 1].isascii() and text[end:end + 1].isalnum()):
+                    continue  # "ak" inside a longer Latin word
+                if any(start < e and s < end for s, e in taken):
+                    continue  # inside a longer term: "高台" in "高台下"
+                site = None if term.forced or lead else _SITE.search(text, 0, start)
+                if len(zh) == 1 and zh != term.zh and not (lead or site):
+                    continue
+                taken.append((start, end))
+                # A site letter travels with the place: "B长廊" -> "Bロング" / "B long".
+                letter = site.group(1).upper() if site else ""
+                found.append((site.end(1) if site else start, end, term, letter))
+        pairs: dict[str, str] = {}
+        for start, end, term, letter in sorted(found, key=lambda f: -f[0]):
+            names = (term.ja or term.en) if lang == "ja" else (term.en or term.ja)
+            text = text[:start] + term.zh + text[end:]
+            if names:
+                gap = " " if letter and lang != "ja" else ""
+                pairs.setdefault(letter + term.zh, letter + gap + names[0])
+        return text, list(reversed(pairs.items()))
 
     def substitute(self, text: str) -> str:
         """Glossary-only 'translation': swap every known term for its Chinese."""

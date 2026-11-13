@@ -7,6 +7,11 @@
 #   en / ja  spellings as the speech recogniser writes them; the first is canonical
 #   mishear  wrong transcriptions seen in practice, rewritten to the canonical
 #            spelling before translation
+#   zh_alias other ways players write it in Chinese, such as nicknames (保安 for
+#            零). Used only when translating the player's own messages; captions
+#            always show zh. A one-character alias needs a site letter in front
+#            ("A大"), or a required lead-in written in brackets: "(有)大" matches
+#            the 大 in 有大. Latin aliases ("AK") match in any letter case.
 #
 # Chinese names follow the 无畏契约 client (checked against wiki.biligame.com/valorant,
 # 2026-11). Entries marked "unverified" are best guesses for the Japanese spelling.
@@ -19,19 +24,19 @@ terms = [
   { zh = "炼狱", kind = "agent", en = ["Brimstone", "Brim"], ja = ["ブリムストーン", "ブリム"] },
   { zh = "蝰蛇", kind = "agent", en = ["Viper"], ja = ["ヴァイパー"] },
   { zh = "幽影", kind = "agent", en = ["Omen"], ja = ["オーメン"] },
-  { zh = "奇乐", kind = "agent", en = ["Killjoy", "KJ"], ja = ["キルジョイ"] },
-  { zh = "零", kind = "agent", en = ["Cypher"], ja = ["サイファー"] },
+  { zh = "奇乐", kind = "agent", en = ["Killjoy", "KJ"], ja = ["キルジョイ"], zh_alias = ["鸡妈妈"] },
+  { zh = "零", kind = "agent", en = ["Cypher"], ja = ["サイファー"], zh_alias = ["保安"] },
   { zh = "猎枭", kind = "agent", en = ["Sova"], ja = ["ソーヴァ"] },
-  { zh = "贤者", kind = "agent", en = ["Sage"], ja = ["セージ"] },
-  { zh = "不死鸟", kind = "agent", en = ["Phoenix"], ja = ["フェニックス"] },
-  { zh = "捷风", kind = "agent", en = ["Jett"], ja = ["ジェット"], mishear = ["Jet"] },
+  { zh = "贤者", kind = "agent", en = ["Sage"], ja = ["セージ"], zh_alias = ["奶妈"] },
+  { zh = "不死鸟", kind = "agent", en = ["Phoenix"], ja = ["フェニックス"], zh_alias = ["火男"] },
+  { zh = "捷风", kind = "agent", en = ["Jett"], ja = ["ジェット"], mishear = ["Jet"], zh_alias = ["捷提", "捷踢"] },
   { zh = "芮娜", kind = "agent", en = ["Reyna"], ja = ["レイナ"], mishear = ["Reina", "Rayna"] },
   { zh = "雷兹", kind = "agent", en = ["Raze"], ja = ["レイズ"] },
   { zh = "铁臂", kind = "agent", en = ["Breach"], ja = ["ブリーチ"] },
   { zh = "斯凯", kind = "agent", en = ["Skye"], ja = ["スカイ"] },
   { zh = "夜露", kind = "agent", en = ["Yoru"], ja = ["ヨル"] },
   { zh = "星礈", kind = "agent", en = ["Astra"], ja = ["アストラ"] },
-  { zh = "K/O", kind = "agent", en = ["KAY/O", "KAYO"], ja = ["ケイオー", "ケーオー"], mishear = ["K.O.", "KO"] },
+  { zh = "K/O", kind = "agent", en = ["KAY/O", "KAYO"], ja = ["ケイオー", "ケーオー"], mishear = ["K.O.", "KO"], zh_alias = ["KO"] },
   { zh = "尚勃勒", kind = "agent", en = ["Chamber"], ja = ["チェンバー"] },
   { zh = "霓虹", kind = "agent", en = ["Neon"], ja = ["ネオン"] },
   { zh = "黑梦", kind = "agent", en = ["Fade"], ja = ["フェイド"] },
@@ -52,19 +57,19 @@ terms = [
   { zh = "短炮", kind = "weapon", en = ["Shorty"], ja = ["ショーティー"] },
   { zh = "狂怒", kind = "weapon", en = ["Frenzy"], ja = ["フレンジー"] },
   { zh = "鬼魅", kind = "weapon", en = ["Ghost"], ja = ["ゴースト"] },
-  { zh = "追猎", kind = "weapon", en = ["Bandit"], ja = ["バンディット"] },  # ja unverified
-  { zh = "正义", kind = "weapon", en = ["Sheriff"], ja = ["シェリフ"] },
+  { zh = "追猎", kind = "weapon", en = ["Bandit"], ja = ["バンディット"], zh_alias = ["USP"] },  # ja unverified
+  { zh = "正义", kind = "weapon", en = ["Sheriff"], ja = ["シェリフ"], zh_alias = ["沙鹰"] },
   { zh = "蜂刺", kind = "weapon", en = ["Stinger"], ja = ["スティンガー"] },
   { zh = "骇灵", kind = "weapon", en = ["Spectre"], ja = ["スペクター"], mishear = ["Specter"] },
   { zh = "雄鹿", kind = "weapon", en = ["Bucky"], ja = ["バッキー"] },
   { zh = "判官", kind = "weapon", en = ["Judge"], ja = ["ジャッジ"] },
   { zh = "獠犬", kind = "weapon", en = ["Bulldog"], ja = ["ブルドッグ"] },
   { zh = "戍卫", kind = "weapon", en = ["Guardian"], ja = ["ガーディアン"] },
-  { zh = "幻影", kind = "weapon", en = ["Phantom"], ja = ["ファントム"] },
-  { zh = "狂徒", kind = "weapon", en = ["Vandal"], ja = ["ヴァンダル"] },
-  { zh = "飞将", kind = "weapon", en = ["Marshal"], ja = ["マーシャル"], mishear = ["Marshall"] },
+  { zh = "幻影", kind = "weapon", en = ["Phantom"], ja = ["ファントム"], zh_alias = ["M4"] },
+  { zh = "狂徒", kind = "weapon", en = ["Vandal"], ja = ["ヴァンダル"], zh_alias = ["AK"] },
+  { zh = "飞将", kind = "weapon", en = ["Marshal"], ja = ["マーシャル"], mishear = ["Marshall"], zh_alias = ["鸟狙"] },
   { zh = "莽侠", kind = "weapon", en = ["Outlaw"], ja = ["アウトロー"] },
-  { zh = "冥驹", kind = "weapon", en = ["Operator", "OP"], ja = ["オペレーター", "オペ"] },
+  { zh = "冥驹", kind = "weapon", en = ["Operator", "OP"], ja = ["オペレーター", "オペ"], zh_alias = ["大狙", "冥狙"] },
   { zh = "战神", kind = "weapon", en = ["Ares"], ja = ["アレス"] },
   { zh = "奥丁", kind = "weapon", en = ["Odin"], ja = ["オーディン"] },
 
@@ -85,7 +90,7 @@ terms = [
 
   # ---- callouts & slang (hints for the translator, never forced) -----------
   { zh = "爆能器", kind = "callout", en = ["Spike"], ja = ["スパイク"] },
-  { zh = "大招", kind = "callout", en = ["ult", "ultimate"], ja = ["ウルト", "アルティメット"] },
+  { zh = "大招", kind = "callout", en = ["ult", "ultimate"], ja = ["ウルト", "アルティメット"], zh_alias = ["(有)大", "(没)大", "(开)大", "(放)大", "(交)大", "终极技能"] },
   { zh = "下包", kind = "callout", en = ["plant"], ja = ["プラント", "設置"] },
   { zh = "拆包", kind = "callout", en = ["defuse"], ja = ["解除"] },
   { zh = "假拆", kind = "callout", en = ["fake defuse"], ja = ["フェイク解除"] },
@@ -107,20 +112,22 @@ terms = [
   { zh = "补枪", kind = "callout", en = ["trade"], ja = ["トレード", "カバー"] },
   { zh = "中路", kind = "callout", en = ["mid"], ja = ["ミッド", "中央"] },
   { zh = "长廊", kind = "callout", en = ["long"], ja = ["ロング"] },
-  { zh = "短道", kind = "callout", en = ["short"], ja = ["ショート"] },
+  { zh = "短道", kind = "callout", en = ["short"], ja = ["ショート"], zh_alias = ["小", "小道"] },
   { zh = "高台", kind = "callout", en = ["heaven"], ja = ["ヘブン"] },
   { zh = "高台下", kind = "callout", en = ["hell"], ja = ["ヘル"] },
-  { zh = "包点", kind = "callout", en = ["site"], ja = ["サイト"] },
+  { zh = "包点", kind = "callout", en = ["site"], ja = ["サイト"], zh_alias = ["点", "区"] },
   { zh = "匪家", kind = "callout", en = ["T spawn", "attacker spawn"], ja = ["アタック側スポーン", "アタッカースポーン", "Tスポーン"] },
   { zh = "警家", kind = "callout", en = ["CT", "CT spawn", "defender spawn"], ja = ["ディフェンス側スポーン", "ディフェンダースポーン"] },
   { zh = "残局", kind = "callout", en = ["clutch"], ja = ["クラッチ"] },
   { zh = "五杀", kind = "callout", en = ["ace"], ja = ["エース"] },
   { zh = "没关系", kind = "callout", en = ["nt", "nice try"], ja = ["ドンマイ", "ナイストライ"] },
-  { zh = "压上去", kind = "callout", en = ["push"], ja = ["プッシュ", "詰める"] },
+  { zh = "压上去", kind = "callout", en = ["push"], ja = ["プッシュ", "詰める"], zh_alias = ["压", "冲"] },
+  { zh = "我的锅", kind = "callout", en = ["my bad", "mb"], ja = ["俺のミス"], zh_alias = ["我的问题"] },
+  { zh = "打得好", kind = "callout", en = ["nice", "ns", "nice shot"], ja = ["ナイス"], zh_alias = ["好枪", "漂亮"] },
 
   # Place names as the Japanese client labels them on the minimap. The Chinese
   # is a plain rendering, not checked against the Chinese client's own labels.
-  { zh = "主道", kind = "callout", en = ["main"], ja = ["メイン"] },
+  { zh = "主道", kind = "callout", en = ["main"], ja = ["メイン"], zh_alias = ["大", "大道"] },
   { zh = "大厅", kind = "callout", en = ["lobby"], ja = ["ロビー"] },
   { zh = "连接", kind = "callout", en = ["link"], ja = ["リンク"] },
   { zh = "窗口", kind = "callout", en = ["window"], ja = ["ウィンドウ"] },
@@ -133,6 +140,14 @@ terms = [
   { zh = "下层", kind = "callout", en = ["bottom"], ja = ["ボトム"] },
   { zh = "上层", kind = "callout", en = ["top"], ja = ["トップ"] },
   { zh = "跳台", kind = "callout", en = ["drop"], ja = ["ドロップ"] },
+
+  # Gear and ways of shooting, in the words Chinese players use.
+  { zh = "刀", kind = "callout", en = ["knife"], ja = ["ナイフ"] },
+  { zh = "半甲", kind = "callout", en = ["light armor", "light shield"], ja = ["ライトアーマー", "ライトシールド"], zh_alias = ["小甲"] },
+  { zh = "全甲", kind = "callout", en = ["heavy armor", "heavy shield", "full armor"], ja = ["ヘビーアーマー", "ヘビーシールド"], zh_alias = ["大甲"] },
+  { zh = "跑打", kind = "callout", en = ["run and gun", "running and gunning"], ja = ["走り撃ち"] },
+  { zh = "混烟", kind = "callout", en = ["spam through smoke", "smoke spam"], ja = ["モク抜き"] },
+  { zh = "一枪头", kind = "callout", en = ["one tap"], ja = ["ワンタップ"] },
 
   # Words about how people play, which a general translator takes literally.
   { zh = "开挂的", kind = "callout", en = ["cheater", "cheaters", "hacker", "hackers"], ja = ["チーター"] },

@@ -93,3 +93,48 @@ def test_site_letter_stays_with_the_place(g):
     # Not a site letter: part of a word, or in front of a name.
     assert "main" in zh(g, "data main")
     assert zh(g, "Bジェット") == {"ジェット": "捷风"}
+
+
+def out(g, text, lang):
+    text, pairs = g.outgoing(text, lang)
+    return text, dict(pairs)
+
+
+def test_outgoing_terms_use_the_names_of_the_target_language(g):
+    assert g.outgoing("壹决残血", "ja") == ("壹决残血", [("壹决", "アイソ"), ("残血", "ロー")])
+    assert g.outgoing("壹决残血", "en") == ("壹决残血", [("壹决", "Iso"), ("残血", "low")])
+    assert g.outgoing("你好", "ja") == ("你好", [])
+
+
+def test_outgoing_site_letter_travels_with_the_place(g):
+    assert out(g, "人在B长廊", "ja") == ("人在B长廊", {"B长廊": "Bロング"})
+    assert out(g, "人在B长廊", "en") == ("人在B长廊", {"B长廊": "B long"})
+    # The longer term wins over the one inside it.
+    assert out(g, "零在高台下", "en") == ("零在高台下", {"高台下": "hell", "零": "Cypher"})
+
+
+def test_outgoing_nicknames_and_shorthand_are_spelled_out(g):
+    assert out(g, "保安在B点，奶妈复活我", "ja") == (
+        "零在B包点，贤者复活我", {"零": "サイファー", "B包点": "Bサイト", "贤者": "セージ"})
+    assert out(g, "我去A大", "en") == ("我去A主道", {"A主道": "A main"})
+    # 大 is the ultimate after 有/开/..., the main path after a site letter.
+    assert out(g, "对面奶妈有大", "en") == ("对面贤者有大招", {"贤者": "Sage", "大招": "ult"})
+    assert out(g, "保安交大了，A大可以压", "ja")[0] == "零交大招了，A主道可以压"
+    # On its own it is just a character.
+    assert out(g, "大家好", "en") == ("大家好", {})
+
+
+def test_nicknames_never_reach_captions(g):
+    # Incoming speech is always shown with the official name.
+    assert zh(g, "Cypher and Sage") == {"Cypher": "零", "Sage": "贤者"}
+    assert all("保安" not in h.zh and "奶妈" not in h.zh for h in g.find("サイファーとセージ"))
+
+
+def test_outgoing_weapon_and_agent_nicknames(g):
+    assert out(g, "给我发把ak", "en") == ("给我发把狂徒", {"狂徒": "Vandal"})
+    assert out(g, "对面有大狙，M4打不过", "ja") == (
+        "对面有冥驹，幻影打不过", {"冥驹": "オペレーター", "幻影": "ファントム"})
+    assert out(g, "鸟狙给捷踢", "en")[0] == "飞将给捷风"
+    assert out(g, "ko闪一下，鸡妈妈守B点", "en")[0] == "K/O闪一下，奇乐守B包点"
+    # Not inside a longer Latin word.
+    assert out(g, "他很weak", "en") == ("他很weak", {})

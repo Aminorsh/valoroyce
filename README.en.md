@@ -30,6 +30,10 @@ The target language is Chinese because that is who the project was built for. Th
 
 ## Install
 
+**Easiest (Windows):** download `valoroyce-…-windows.zip` from [Releases](https://github.com/Aminorsh/valoroyce/releases), unpack it, and double-click `start.bat`. The first start downloads the runtime and the models (about 2 GB in total, needs a network connection); after that it works offline.
+
+From source:
+
 1. Install [uv](https://docs.astral.sh/uv/), a Python manager. In PowerShell:
 
    ```powershell
@@ -63,6 +67,15 @@ A caption strip appears near the bottom of the screen, and a red speech-bubble i
 
 Menu choices are remembered in `valoroyce.state.json` and override `config.toml`. Delete that file to return to the configured defaults.
 
+### Sending text messages to teammates
+
+To type to your team: choose "发消息（中文 → 日语 / 英语）…" in the tray menu, or press **Ctrl+Alt+T**. A small input box opens. Type Chinese and press Enter; the translation is shown and **copied to the clipboard**. Go back to the game's chat box, press Ctrl+V and send. Esc closes the box.
+
+- Pick 日语 (Japanese) or English in the box; the choice is remembered.
+- Agents, weapons, maps and callouts are replaced with what the other language calls them. Chinese nicknames and shorthand are understood too (保安 → Cypher, 奶妈 → Sage, A大 → A main, 有大 → "has ult"). Captions always show the official names.
+- The program only copies. It never types into the game or sends anything for you.
+- Machine translation does best with short, direct sentences. Jokes and slang tend to go wrong.
+
 ### GPU or CPU?
 
 The translation model runs on the GPU by default, which gives faster captions but shares the card with the game (about 1.5 GB of VRAM). If the game stutters with captions on, switch "翻译运行在" to CPU. On CPU, a short line is finalised in roughly a second.
@@ -88,6 +101,7 @@ Copy `config.example.toml` to `config.toml` and edit. Every key is optional. The
 | Show the original text too | `[overlay] show_source = true` |
 | Keep translation off the GPU | `[translate] gpu = false` (or use the tray menu) |
 | No GPU and a busy CPU | `[translate] partials = false` (translate finished sentences only) |
+| Default language and shortcut for messages | `[compose] target = "en"`, `hotkey = "ctrl+shift+f8"` (empty = no shortcut) |
 | Use your own model server (Ollama, LM Studio, ...) | `[translate] backend = "openai"`, plus `base_url`, `model`, `prompt = "generic"` |
 | No translation model, glossary substitution only | `[translate] backend = "none"` |
 
@@ -107,6 +121,7 @@ and list it in `config.toml`: `[glossary] extra = ["my_terms.toml"]`.
 - `kind = "agent" | "weapon" | "map"`: a name. It is always shown exactly as you wrote it.
 - `kind = "callout"`: slang. It is only offered to the translation model as a hint.
 - `mishear`: wrong transcriptions the recogniser tends to produce for this term.
+- `zh_alias`: other Chinese ways of saying it, such as nicknames (`zh_alias = ["保安"]`). Recognised when translating your own messages.
 
 The built-in list is [`src/valoroyce/data/valorant.toml`](src/valoroyce/data/valorant.toml).
 
@@ -127,6 +142,7 @@ uv run valoroyce run --file some.wav          # caption a recording
 uv run valoroyce run --no-overlay             # no window; print captions to the terminal
 uv run valoroyce run --cpu                    # keep translation off the GPU for this run
 uv run valoroyce translate "アイソがロングにいる"   # try the glossary and the model on text
+uv run valoroyce say --to en "保安在B点"        # Chinese -> Japanese / English
 uv run --extra dev pytest                     # run the tests
 ```
 
@@ -166,6 +182,8 @@ Everything is in `src/valoroyce/`. Each stage lives in one file and knows nothin
 | `translate.py` | Translation backends, the prompt formats, and the llama.cpp child process |
 | `pipeline.py` | Threads and queues tying the stages together; decides which captions are still worth translating |
 | `overlay.py` | The caption window, the tray menu, and restarting the pipeline when a menu choice changes |
+| `compose.py` | The message box: Chinese in, Japanese or English out to the clipboard |
+| `hotkey.py` | The system-wide shortcut that opens the message box (Windows) |
 | `state.py` | Remembered tray-menu choices |
 | `config.py` | All settings and their defaults |
 | `setup.py` | Model and runtime downloads with source speed-testing and checksums |
@@ -174,7 +192,7 @@ Everything is in `src/valoroyce/`. Each stage lives in one file and knows nothin
 ### Ground rules
 
 - **Offline by default.** The default path must work with no network once models are present. Online services may only be opt-in configuration.
-- **Never touch the game.** Audio comes from OS loopback capture and captions go to an ordinary window. Nothing that reads, hooks or injects into the game process will be accepted; players' accounts are at stake.
+- **Never touch the game.** Audio comes from OS loopback capture and captions go to an ordinary window. Outgoing messages stop at the clipboard; nothing sends keystrokes to the game. Nothing that reads, hooks or injects into the game process will be accepted; players' accounts are at stake.
 - **Defaults live only in `config.py`.** `config.example.toml` must show the same values, and a test checks that it does.
 - **Say what was tested where.** Much of this has only run on Linux. If you verify something on Windows, say so in the pull request.
 - **Keep test data clean.** Do not put offensive or politically sensitive sentences in the repository, including tests, even to test how they are handled.

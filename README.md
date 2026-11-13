@@ -27,6 +27,10 @@
 
 ## 安装
 
+**最简单的方式（Windows）**：到 [Releases](https://github.com/Aminorsh/valoroyce/releases) 下载 `valoroyce-…-windows.zip`，解压到一个路径里没有中文的文件夹，双击 `start.bat`。第一次启动会自动下载运行环境和模型（共约 2 GB，需要联网），之后可以离线使用。
+
+从源码安装：
+
 1. 安装 [uv](https://docs.astral.sh/uv/)（一个 Python 管理工具）。打开 PowerShell 粘贴：
 
    ```powershell
@@ -60,6 +64,15 @@ uv run valoroyce           # 启动
 
 菜单里选过的东西会记住，下次启动沿用（保存在 `valoroyce.state.json`，删掉它即恢复默认）。
 
+### 给队友发文字消息
+
+想打字和队友交流时：在托盘菜单点「发消息（中文 → 日语 / 英语）…」，或按快捷键 **Ctrl+Alt+T**，会弹出一个小输入框。输入中文按回车，译文会显示出来并**自动复制到剪贴板**，回到游戏的聊天框按 Ctrl+V 粘贴、回车发送即可。按 Esc 关闭输入框。
+
+- 目标语言在输入框里选「日语」或「English」，会记住上次的选择。
+- 英雄、武器、地图和报点会换成对方语言里的叫法，中文里的俗称和省略说法也认识（「保安」→ Cypher，「奶妈」→ Sage，「A大」→ A main，「有大」→ 有大招）。字幕里显示的始终是正式译名。
+- 程序只负责复制，不会替你往游戏里打字或发送。
+- 机器翻译对简短直接的句子效果最好（「壹决残血，在B长廊」），俏皮话和网络梗容易翻歪。
+
 ### 显卡还是 CPU？
 
 翻译模型默认放在显卡上跑，出字幕更快，但它会和游戏共用显卡（约占 1.5 GB 显存）。如果开着字幕时游戏掉帧或卡顿，在托盘菜单把「翻译运行在」切到 **CPU** 即可；CPU 模式下短句定稿大约 1 秒。
@@ -85,6 +98,7 @@ uv run valoroyce           # 启动
 | 同时显示日语原文 | `[overlay] show_source = true` |
 | 翻译不用显卡 | `[translate] gpu = false`（或托盘菜单切换） |
 | 没有显卡，CPU 吃紧 | `[translate] partials = false`（只翻译说完的整句） |
+| 发消息的默认语言、快捷键 | `[compose] target = "en"`、`hotkey = "ctrl+shift+f8"`（留空则不注册快捷键） |
 | 用自己的模型服务（Ollama / LM Studio 等） | `[translate] backend = "openai"`，并设置 `base_url`、`model`、`prompt = "generic"` |
 | 不要翻译模型，只替换术语 | `[translate] backend = "none"` |
 
@@ -99,7 +113,7 @@ terms = [
 ]
 ```
 
-然后在 `config.toml` 里 `[glossary] extra = ["my_terms.toml"]`。`kind` 为 `agent / weapon / map` 的词一定会按你写的译名显示；`callout` 只是给翻译模型的参考。`mishear` 填识别器常写错的样子。内置词表在 [`src/valoroyce/data/valorant.toml`](src/valoroyce/data/valorant.toml)，欢迎提 PR 补充。
+然后在 `config.toml` 里 `[glossary] extra = ["my_terms.toml"]`。`kind` 为 `agent / weapon / map` 的词一定会按你写的译名显示；`callout` 只是给翻译模型的参考。`mishear` 填识别器常写错的样子；`zh_alias` 填中文里的其他叫法（如 `zh_alias = ["保安"]`），发消息时会认出来。内置词表在 [`src/valoroyce/data/valorant.toml`](src/valoroyce/data/valorant.toml)，欢迎提 PR 补充。
 
 ## 延迟
 
@@ -118,6 +132,7 @@ uv run valoroyce run --file some.wav          # 用录音文件测试
 uv run valoroyce run --no-overlay             # 不开悬浮窗，字幕打印在终端
 uv run valoroyce run --cpu                    # 本次运行不使用显卡
 uv run valoroyce translate "アイソがロングにいる"   # 直接测试术语和翻译
+uv run valoroyce say --to en "保安在B点"        # 中文 → 日语 / 英语
 uv run --extra dev pytest                     # 跑测试
 ```
 

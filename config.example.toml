@@ -82,3 +82,11 @@ y = 0.82
 width = 0.5
 # Background darkness, 0 to 1. 背景不透明度
 opacity = 0.72
+
+[compose]
+# Type Chinese, get a message for teammates. "ja" or "en".
+# 发消息功能：把你打的中文翻译成 "ja"（日语）或 "en"（英语）
+target = "ja"
+# System-wide shortcut that opens the message box (Windows). "" = none.
+# 打开发消息窗口的全局快捷键（Windows）；留空则不注册
+hotkey = "ctrl+alt+t"

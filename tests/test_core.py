@@ -74,7 +74,7 @@ def test_jobbox_drops_stale_finals():
 def test_hy_mt_prompt_follows_the_model_card():
     g = Glossary.load()
     text = "アイソがロー"
-    msgs = build_messages(text, g.find(text), TranslateConfig())
+    msgs = build_messages(text, [(h.source, h.zh) for h in g.find(text)], TranslateConfig())
     assert msgs == [{"role": "user", "content":
         "参考下面的翻译：\nアイソ 翻译成 壹决\nロー 翻译成 残血\n\n"
         "将以下文本翻译为中文，注意只需要输出翻译后的结果，不要额外解释：\nアイソがロー"}]
@@ -84,7 +84,8 @@ def test_hy_mt_prompt_follows_the_model_card():
 
 def test_generic_prompt_carries_glossary():
     g = Glossary.load()
-    msgs = build_messages("Jett low", g.find("Jett low"), TranslateConfig(prompt="generic"))
+    msgs = build_messages("Jett low", [(h.source, h.zh) for h in g.find("Jett low")],
+                          TranslateConfig(prompt="generic"))
     assert msgs[0]["role"] == "system" and "Jett = 捷风" in msgs[0]["content"]
     assert msgs[1] == {"role": "user", "content": "Jett low"}
 
@@ -151,3 +152,32 @@ def test_gpu_switch_controls_llama_layers(tmp_path, monkeypatch):
         cmd = seen[-1]
         assert cmd[cmd.index("-ngl") + 1] == layers
         assert Path(cmd[0]).is_absolute() and Path(cmd[cmd.index("-m") + 1]).is_absolute()
+
+
+def test_hotkey_parsing():
+    from valoroyce.hotkey import parse
+
+    assert parse("ctrl+alt+t") == (0x2 | 0x1, ord("T"))
+    assert parse("Ctrl + Shift + F8") == (0x2 | 0x4, 0x77)
+    for bad in ("t", "ctrl+alt", "ctrl+nope", ""):
+        with pytest.raises(ValueError):
+            parse(bad)
+    parse(Config().compose.hotkey)  # the default must be valid
+
+
+def test_outgoing_prompt_names_the_target_language():
+    from valoroyce.translate import OUTGOING
+
+    g = Glossary.load()
+    msgs = build_messages(*g.outgoing("壹决残血", "ja"), TranslateConfig(), target=OUTGOING["ja"])
+    assert msgs[0]["content"] == (
+        "参考下面的翻译：\n壹决 翻译成 アイソ\n残血 翻译成 ロー\n\n"
+        "将以下文本翻译为日语，注意只需要输出翻译后的结果，不要额外解释：\n壹决残血")
+    generic = build_messages("你好", [], TranslateConfig(prompt="generic"), target=OUTGOING["en"])
+    assert "英语" in generic[0]["content"] and "发文字消息" in generic[0]["content"]
+
+
+def test_glossary_only_backend_can_compose():
+    from valoroyce.translate import GlossaryTranslator
+
+    assert GlossaryTranslator(Glossary.load()).compose("壹决在B长廊", "en") == "Iso在B long"

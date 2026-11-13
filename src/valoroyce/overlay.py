@@ -22,8 +22,10 @@ from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon, QWidget
 
 from . import state
 from .audio import list_devices, open_source
+from .compose import ComposeWindow
 from .config import Config, OverlayConfig
 from .glossary import Glossary
+from .hotkey import GlobalHotkey
 from .pipeline import Caption, Pipeline
 from .translate import make_translator
 
@@ -207,6 +209,13 @@ class Controller(QObject):
         self._reported: Pipeline | None = None  # pipeline whose error was already shown
         self._welcomed = False
         self.from_file = cfg.audio.source == "file"
+        self.compose = ComposeWindow(lambda: self.translator, cfg.compose.target)
+        self.hotkey = None
+        if cfg.compose.hotkey:
+            try:
+                self.hotkey = GlobalHotkey(app, cfg.compose.hotkey, self.compose.open)
+            except Exception as e:  # a shortcut is a convenience; never block start-up
+                print(f"warning: shortcut not available: {e}", file=sys.stderr)
 
         self.tray = QSystemTrayIcon(app_icon(), app)
         self.menu = QMenu()
@@ -227,6 +236,14 @@ class Controller(QObject):
         m, cfg = self.menu, self.cfg
         self.status = QAction("正在启动…", m, enabled=False)
         m.addAction(self.status)
+        m.addSeparator()
+
+        label = "发消息（中文 → 日语 / 英语）…"
+        if self.hotkey and self.hotkey.registered:
+            label += "\t" + self.cfg.compose.hotkey.title()
+        send = QAction(label, m)
+        send.triggered.connect(self.compose.open)
+        m.addAction(send)
         m.addSeparator()
 
         self.pause = QAction("暂停字幕", m, checkable=True)
@@ -407,6 +424,9 @@ class Controller(QObject):
 
     def shutdown(self) -> None:
         self.tray.hide()
+        self.compose.hide()
+        if self.hotkey:
+            self.hotkey.release()
         if self.pipeline:
             self.pipeline.stop()
         if self.translator:

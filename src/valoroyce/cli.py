@@ -1,4 +1,4 @@
-"""Command line: `valoroyce run | setup | devices | translate`."""
+"""Command line: `valoroyce run | setup | devices | translate | say`."""
 
 from __future__ import annotations
 
@@ -107,6 +107,23 @@ def cmd_translate(args) -> int:
     return 0
 
 
+def cmd_say(args) -> int:
+    """Chinese in, Japanese or English out: the message box without the window."""
+    from .translate import make_translator
+
+    cfg, glossary = _load(args)
+    if args.backend:
+        cfg.translate.backend = args.backend
+    translator = make_translator(cfg.translate, glossary, cfg.models_path)
+    try:
+        lines = args.text or [line.strip() for line in sys.stdin if line.strip()]
+        for line in lines:
+            print(translator.compose(line, args.to or cfg.compose.target))
+    finally:
+        translator.close()
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     for stream in (sys.stdout, sys.stderr):  # Windows consoles default to a legacy codepage
         if hasattr(stream, "reconfigure"):
@@ -140,6 +157,12 @@ def main(argv: list[str] | None = None) -> int:
     t.add_argument("text", nargs="*")
     t.add_argument("--backend", choices=["llama", "openai", "none"])
     t.set_defaults(fn=cmd_translate)
+
+    y = sub.add_parser("say", help="translate your Chinese into Japanese / English")
+    y.add_argument("text", nargs="*")
+    y.add_argument("--to", choices=["ja", "en"], help="target language (default: compose.target)")
+    y.add_argument("--backend", choices=["llama", "openai", "none"])
+    y.set_defaults(fn=cmd_say)
 
     args = p.parse_args(argv)
     if not args.cmd:
