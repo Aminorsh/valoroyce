@@ -1,0 +1,119 @@
+# Built-in VALORANT glossary: what players say (ja / en) -> the mainland-China
+# client's wording (zh).
+#
+#   zh       the Chinese shown in captions
+#   kind     agent | weapon | map : names. Always forced into the caption.
+#            callout              : slang. Offered to the translator as a hint only.
+#   en / ja  spellings as the speech recogniser writes them; the first is canonical
+#   mishear  wrong transcriptions seen in practice, rewritten to the canonical
+#            spelling before translation
+#
+# Chinese names follow the 无畏契约 client (checked against wiki.biligame.com/valorant,
+# 2026-11). Entries marked "unverified" are best guesses for the Japanese spelling.
+#
+# Add your own in a separate file and list it under [glossary] extra = [...] ;
+# an entry with the same zh replaces the built-in one.
+
+terms = [
+  # ---- agents -------------------------------------------------------------
+  { zh = "炼狱", kind = "agent", en = ["Brimstone", "Brim"], ja = ["ブリムストーン", "ブリム"] },
+  { zh = "蝰蛇", kind = "agent", en = ["Viper"], ja = ["ヴァイパー"] },
+  { zh = "幽影", kind = "agent", en = ["Omen"], ja = ["オーメン"] },
+  { zh = "奇乐", kind = "agent", en = ["Killjoy", "KJ"], ja = ["キルジョイ"] },
+  { zh = "零", kind = "agent", en = ["Cypher"], ja = ["サイファー"] },
+  { zh = "猎枭", kind = "agent", en = ["Sova"], ja = ["ソーヴァ"] },
+  { zh = "贤者", kind = "agent", en = ["Sage"], ja = ["セージ"] },
+  { zh = "不死鸟", kind = "agent", en = ["Phoenix"], ja = ["フェニックス"] },
+  { zh = "捷风", kind = "agent", en = ["Jett"], ja = ["ジェット"], mishear = ["Jet"] },
+  { zh = "芮娜", kind = "agent", en = ["Reyna"], ja = ["レイナ"], mishear = ["Reina", "Rayna"] },
+  { zh = "雷兹", kind = "agent", en = ["Raze"], ja = ["レイズ"] },
+  { zh = "铁臂", kind = "agent", en = ["Breach"], ja = ["ブリーチ"] },
+  { zh = "斯凯", kind = "agent", en = ["Skye"], ja = ["スカイ"] },
+  { zh = "夜露", kind = "agent", en = ["Yoru"], ja = ["ヨル"] },
+  { zh = "星礈", kind = "agent", en = ["Astra"], ja = ["アストラ"] },
+  { zh = "K/O", kind = "agent", en = ["KAY/O", "KAYO"], ja = ["ケイオー", "ケーオー"], mishear = ["K.O.", "KO"] },
+  { zh = "尚勃勒", kind = "agent", en = ["Chamber"], ja = ["チェンバー"] },
+  { zh = "霓虹", kind = "agent", en = ["Neon"], ja = ["ネオン"] },
+  { zh = "黑梦", kind = "agent", en = ["Fade"], ja = ["フェイド"] },
+  { zh = "海神", kind = "agent", en = ["Harbor"], ja = ["ハーバー"] },
+  { zh = "盖可", kind = "agent", en = ["Gekko"], ja = ["ゲッコー"], mishear = ["Gecko"] },
+  { zh = "钢锁", kind = "agent", en = ["Deadlock"], ja = ["デッドロック"] },
+  { zh = "壹决", kind = "agent", en = ["Iso"], ja = ["アイソ"], mishear = ["愛想", "Eyeso", "I so"] },
+  { zh = "暮蝶", kind = "agent", en = ["Clove"], ja = ["クローヴ"] },
+  { zh = "维斯", kind = "agent", en = ["Vyse"], ja = ["ヴァイス"], mishear = ["Vice"] },
+  { zh = "钛狐", kind = "agent", en = ["Tejo"], ja = ["テホ"], mishear = ["Teho"] },
+  { zh = "幻棱", kind = "agent", en = ["Waylay"], ja = ["ウェイレイ"] },
+  { zh = "禁灭", kind = "agent", en = ["Veto"], ja = ["ヴィトー"] },
+  { zh = "迷核", kind = "agent", en = ["Miks"], ja = ["ミクス"] },
+  { zh = "遐思", kind = "agent", en = ["Hush"], ja = ["ハッシュ"] },  # ja unverified
+
+  # ---- weapons ------------------------------------------------------------
+  { zh = "标配", kind = "weapon", en = ["Classic"], ja = ["クラシック"] },
+  { zh = "短炮", kind = "weapon", en = ["Shorty"], ja = ["ショーティー"] },
+  { zh = "狂怒", kind = "weapon", en = ["Frenzy"], ja = ["フレンジー"] },
+  { zh = "鬼魅", kind = "weapon", en = ["Ghost"], ja = ["ゴースト"] },
+  { zh = "追猎", kind = "weapon", en = ["Bandit"], ja = ["バンディット"] },  # ja unverified
+  { zh = "正义", kind = "weapon", en = ["Sheriff"], ja = ["シェリフ"] },
+  { zh = "蜂刺", kind = "weapon", en = ["Stinger"], ja = ["スティンガー"] },
+  { zh = "骇灵", kind = "weapon", en = ["Spectre"], ja = ["スペクター"], mishear = ["Specter"] },
+  { zh = "雄鹿", kind = "weapon", en = ["Bucky"], ja = ["バッキー"] },
+  { zh = "判官", kind = "weapon", en = ["Judge"], ja = ["ジャッジ"] },
+  { zh = "獠犬", kind = "weapon", en = ["Bulldog"], ja = ["ブルドッグ"] },
+  { zh = "戍卫", kind = "weapon", en = ["Guardian"], ja = ["ガーディアン"] },
+  { zh = "幻影", kind = "weapon", en = ["Phantom"], ja = ["ファントム"] },
+  { zh = "狂徒", kind = "weapon", en = ["Vandal"], ja = ["ヴァンダル"] },
+  { zh = "飞将", kind = "weapon", en = ["Marshal"], ja = ["マーシャル"], mishear = ["Marshall"] },
+  { zh = "莽侠", kind = "weapon", en = ["Outlaw"], ja = ["アウトロー"] },
+  { zh = "冥驹", kind = "weapon", en = ["Operator", "OP"], ja = ["オペレーター", "オペ"] },
+  { zh = "战神", kind = "weapon", en = ["Ares"], ja = ["アレス"] },
+  { zh = "奥丁", kind = "weapon", en = ["Odin"], ja = ["オーディン"] },
+
+  # ---- maps ---------------------------------------------------------------
+  { zh = "源工重镇", kind = "map", en = ["Bind"], ja = ["バインド"] },
+  { zh = "隐世修所", kind = "map", en = ["Haven"], ja = ["ヘイヴン"] },
+  { zh = "霓虹町", kind = "map", en = ["Split"], ja = ["スプリット"] },
+  { zh = "亚海悬城", kind = "map", en = ["Ascent"], ja = ["アセント"] },
+  { zh = "森寒冬港", kind = "map", en = ["Icebox"], ja = ["アイスボックス"] },
+  { zh = "微风岛屿", kind = "map", en = ["Breeze"], ja = ["ブリーズ"] },
+  { zh = "裂变峡谷", kind = "map", en = ["Fracture"], ja = ["フラクチャー"] },
+  { zh = "深海明珠", kind = "map", en = ["Pearl"], ja = ["パール"] },
+  { zh = "莲华古城", kind = "map", en = ["Lotus"], ja = ["ロータス"] },
+  { zh = "日落之城", kind = "map", en = ["Sunset"], ja = ["サンセット"] },
+  { zh = "幽邃地窟", kind = "map", en = ["Abyss"], ja = ["アビス"] },
+  { zh = "盐海矿镇", kind = "map", en = ["Corrode"], ja = ["カロード"] },
+  { zh = "天枢云阙", kind = "map", en = ["Summit"], ja = ["サミット"] },  # ja unverified
+
+  # ---- callouts & slang (hints for the translator, never forced) -----------
+  { zh = "爆能器", kind = "callout", en = ["Spike"], ja = ["スパイク"] },
+  { zh = "大招", kind = "callout", en = ["ult", "ultimate"], ja = ["ウルト", "アルティメット"] },
+  { zh = "下包", kind = "callout", en = ["plant"], ja = ["プラント", "設置"] },
+  { zh = "拆包", kind = "callout", en = ["defuse"], ja = ["解除"] },
+  { zh = "假拆", kind = "callout", en = ["fake defuse"], ja = ["フェイク解除"] },
+  { zh = "烟", kind = "callout", en = ["smoke"], ja = ["スモーク", "モク"] },
+  { zh = "闪", kind = "callout", en = ["flash"], ja = ["フラッシュ"] },
+  { zh = "燃烧弹", kind = "callout", en = ["molly"], ja = ["モロトフ", "モロ"] },
+  { zh = "绕后", kind = "callout", en = ["flank"], ja = ["裏取り", "裏"] },
+  { zh = "单摸", kind = "callout", en = ["lurk"], ja = ["ラーク"] },
+  { zh = "回防", kind = "callout", en = ["retake"], ja = ["リテイク"] },
+  { zh = "转点", kind = "callout", en = ["rotate"], ja = ["ローテ", "ローテート"] },
+  { zh = "一波冲", kind = "callout", en = ["rush"], ja = ["ラッシュ"] },
+  { zh = "残血", kind = "callout", en = ["low", "one shot"], ja = ["ロー", "ワンショット", "ミリ"] },
+  { zh = "半血", kind = "callout", en = ["half"], ja = ["ハーフ"] },
+  { zh = "经济局", kind = "callout", en = ["eco"], ja = ["エコ"] },
+  { zh = "保枪", kind = "callout", en = ["save"], ja = ["セーブ"] },
+  { zh = "起全甲全枪", kind = "callout", en = ["full buy"], ja = ["フルバイ"] },
+  { zh = "强起", kind = "callout", en = ["force buy", "force"], ja = ["フォースバイ", "フォース"] },
+  { zh = "探头", kind = "callout", en = ["peek"], ja = ["ピーク"] },
+  { zh = "补枪", kind = "callout", en = ["trade"], ja = ["トレード", "カバー"] },
+  { zh = "中路", kind = "callout", en = ["mid"], ja = ["ミッド"] },
+  { zh = "长廊", kind = "callout", en = ["long"], ja = ["ロング"] },
+  { zh = "短道", kind = "callout", en = ["short"], ja = ["ショート"] },
+  { zh = "高台", kind = "callout", en = ["heaven"], ja = ["ヘブン"] },
+  { zh = "高台下", kind = "callout", en = ["hell"], ja = ["ヘル"] },
+  { zh = "包点", kind = "callout", en = ["site"], ja = ["サイト"] },
+  { zh = "匪家", kind = "callout", en = ["T spawn", "attacker spawn"], ja = ["アタッカースポーン", "Tスポーン"] },
+  { zh = "警家", kind = "callout", en = ["CT", "CT spawn", "defender spawn"], ja = ["ディフェンダースポーン"] },
+  { zh = "残局", kind = "callout", en = ["clutch"], ja = ["クラッチ"] },
+  { zh = "五杀", kind = "callout", en = ["ace"], ja = ["エース"] },
+  { zh = "没关系", kind = "callout", en = ["nt", "nice try"], ja = ["ドンマイ", "ナイストライ"] },
+]

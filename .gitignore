@@ -1,0 +1,22 @@
+# Downloaded models and the llama.cpp runtime (about 1.7 GB); `valoroyce setup` recreates them.
+models/
+
+# Per-user settings: copy config.example.toml to config.toml.
+config.toml
+# Caption window position, written when it is dragged.
+valoroyce.state.json
+
+# Python environment, caches and build output are recreated locally.
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+dist/
+*.egg-info/
+
+# Runtime logs.
+*.log
+
+# OS noise.
+.DS_Store
+Thumbs.db

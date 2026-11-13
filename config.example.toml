@@ -1,0 +1,84 @@
+# Copy to config.toml and edit. Every key is optional; the values shown are the defaults.
+# 复制为 config.toml 再修改。所有项都可以省略，下面写的就是默认值。
+
+# Where models and the llama.cpp runtime are stored. 模型存放目录
+models_dir = "models"
+
+[audio]
+# "loopback" = what the PC is playing 电脑正在播放的声音
+# "mic"      = an input device 麦克风
+# "file"     = a WAV file (set `file`) 音频文件
+source = "loopback"
+# Part of the device name, see `valoroyce devices`. Empty = system default.
+# 设备名的一部分；留空用系统默认设备
+device = ""
+file = ""
+realtime = true
+
+[vad]
+threshold = 0.5
+# Silence (seconds) that ends a sentence. Lower = faster captions, more fragments.
+# 静音多久算一句话说完。越小字幕越快，但更容易把一句话切碎
+min_silence = 0.35
+min_speech = 0.2
+# Sentences longer than this are cut. 超过这么长强制断句
+max_speech = 8.0
+
+[asr]
+# Expected languages, default first. ["ja"] alone is the most stable.
+# 预期出现的语言，第一个是默认语言
+languages = ["ja", "en"]
+# Refresh the half-finished caption this often (seconds). 0 = whole sentences only.
+# 说话过程中每隔多久刷新一次半句字幕；0 表示只显示整句
+partial_interval = 0.5
+num_threads = 2
+provider = "cpu"
+
+[translate]
+# "llama"  = start the bundled local model 自动启动本地翻译模型
+# "openai" = use a server you run at base_url 使用你自己启动的模型服务
+# "none"   = glossary substitution only 只替换术语，不翻译
+backend = "llama"
+target = "中文"
+base_url = "http://127.0.0.1:8177"
+api_key = ""
+model = "hy-mt2"
+# "hy-mt" for Hy-MT models, "generic" for any other chat model.
+prompt = "hy-mt"
+# Translate half-finished captions too. Turn off on a weak CPU.
+# 是否翻译半句字幕；CPU 吃紧时关掉
+partials = true
+max_tokens = 96
+timeout = 8.0
+# backend = "llama" only.
+# Run translation on the graphics card: faster, but shares the card with the game.
+# Set false if the game stutters. Also switchable from the tray menu.
+# 翻译模型是否用显卡跑：更快，但会和游戏抢显卡；游戏掉帧就改成 false（托盘菜单里也能切换）
+gpu = true
+# Layers placed on the GPU when gpu = true, CPU threads, extra llama-server flags.
+gpu_layers = 99
+threads = 4
+server_args = []
+
+[glossary]
+# Your own term files, merged over the built-in list. 自己的术语文件
+extra = []
+# Snap near-miss spellings onto known names. 自动纠正近似写法
+fuzzy = true
+
+[overlay]
+enabled = true
+font_family = "Microsoft YaHei"
+font_size = 22
+max_lines = 3
+# Seconds a finished caption stays. 整句字幕停留秒数
+linger = 6.0
+# Show the recognised Japanese / English above the Chinese. 同时显示原文
+show_source = false
+# Position as fractions of the screen: centre x, bottom edge y, width.
+# 位置（占屏幕的比例）：水平中心、底边高度、宽度。也可在托盘菜单里拖动调整
+x = 0.5
+y = 0.82
+width = 0.5
+# Background darkness, 0 to 1. 背景不透明度
+opacity = 0.72

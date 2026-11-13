@@ -1,0 +1,435 @@
+"""The desktop app: a caption strip plus a system-tray icon to control it.
+
+The strip is an ordinary transparent, always-on-top, click-through window. It
+does not hook, inject into or read the game, which also means the game must
+run in "Windowed Fullscreen" (exclusive fullscreen hides every other window).
+"""
+
+from __future__ import annotations
+
+import signal
+import sys
+import threading
+import time
+from dataclasses import dataclass
+from importlib import resources
+
+from PySide6.QtCore import QObject, QPoint, QRect, QRectF, Qt, QTimer, Signal
+from PySide6.QtGui import (
+    QAction, QActionGroup, QColor, QCursor, QFont, QFontMetrics, QIcon, QPainter, QPixmap,
+)
+from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon, QWidget
+
+from . import state
+from .audio import list_devices, open_source
+from .config import Config, OverlayConfig
+from .glossary import Glossary
+from .pipeline import Caption, Pipeline
+from .translate import make_translator
+
+PAD_X, PAD_Y, GAP = 14, 6, 6
+FONT_SIZES = [("小", 16), ("中", 22), ("大", 28), ("特大", 36)]
+
+
+def app_icon() -> QIcon:
+    pix = QPixmap()
+    pix.loadFromData(resources.files("valoroyce.data").joinpath("icon.png").read_bytes())
+    return QIcon(pix)
+
+
+@dataclass
+class _Line:
+    utt: int
+    text: str
+    source: str
+    final: bool
+    expires: float  # monotonic; partial lines get a generous value and are replaced
+
+
+class CaptionWindow(QWidget):
+    caption = Signal(object)  # Caption, emitted from the translator thread
+
+    def __init__(self, cfg: OverlayConfig):
+        super().__init__()
+        self.cfg = cfg
+        self.lines: list[_Line] = []
+        self.moving = False
+        self.paused = False
+        self._drag: QPoint | None = None
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
+        self._apply_flags()
+        self.set_font_size(cfg.font_size)
+        self.caption.connect(self.on_caption)
+        self._timer = QTimer(self)
+        self._timer.timeout.connect(self._expire)
+        self._timer.start(250)
+
+    # -- window plumbing -----------------------------------------------------
+
+    def _apply_flags(self) -> None:
+        flags = (
+            Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.WindowStaysOnTopHint
+            | Qt.WindowType.Tool  # no taskbar entry
+            | Qt.WindowType.WindowDoesNotAcceptFocus
+        )
+        if not self.moving:
+            flags |= Qt.WindowType.WindowTransparentForInput  # clicks go to the game
+        self.setWindowFlags(flags)
+
+    def set_font_size(self, size: int) -> None:
+        self.cfg.font_size = size
+        self.font_main = QFont(self.cfg.font_family, size)
+        self.font_main.setBold(True)
+        self.font_src = QFont(self.cfg.font_family, max(8, int(size * 0.6)))
+        self._place()
+        self.update()
+
+    def _place(self) -> None:
+        screen = QApplication.primaryScreen().geometry()
+        width = int(screen.width() * self.cfg.width)
+        line_h = QFontMetrics(self.font_main).height() + QFontMetrics(self.font_src).height()
+        height = (line_h + 2 * PAD_Y + GAP) * self.cfg.max_lines * 2
+        x = screen.x() + int(screen.width() * self.cfg.x) - width // 2
+        bottom = screen.y() + int(screen.height() * self.cfg.y)
+        saved = state.load()
+        if isinstance(saved.get("x"), int) and isinstance(saved.get("bottom"), int):
+            x, bottom = saved["x"], saved["bottom"]
+        self.setGeometry(x, bottom - height, width, height)
+
+    def set_moving(self, on: bool) -> None:
+        self.moving = on
+        self._apply_flags()
+        self.show()  # changing flags hides the window
+        self.update()
+
+    def mousePressEvent(self, e) -> None:
+        if self.moving:
+            self._drag = e.globalPosition().toPoint() - self.frameGeometry().topLeft()
+
+    def mouseMoveEvent(self, e) -> None:
+        if self.moving and self._drag is not None:
+            self.move(e.globalPosition().toPoint() - self._drag)
+
+    def mouseReleaseEvent(self, e) -> None:
+        if self.moving:
+            self._drag = None
+            geo = self.geometry()
+            state.save(x=geo.x(), bottom=geo.y() + geo.height())
+
+    # -- captions --------------------------------------------------------------
+
+    def on_caption(self, c: Caption) -> None:
+        if self.paused:
+            return
+        now = time.monotonic()
+        line = _Line(c.utt, c.text, c.source, c.final, now + (self.cfg.linger if c.final else 15.0))
+        for i, old in enumerate(self.lines):
+            if old.utt == c.utt:
+                self.lines[i] = line
+                break
+        else:
+            self.lines.append(line)
+        del self.lines[:-self.cfg.max_lines]
+        self.update()
+
+    def notice(self, text: str, seconds: float = 5.0) -> None:
+        """A message from the app itself; replaces everything on screen."""
+        self.lines = [_Line(-1, text, "", True, time.monotonic() + seconds)]
+        self.update()
+
+    def _expire(self) -> None:
+        now = time.monotonic()
+        kept = [ln for ln in self.lines if ln.expires > now]
+        if len(kept) != len(self.lines):
+            self.lines = kept
+            self.update()
+
+    def paintEvent(self, _event) -> None:
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        if self.moving:
+            p.fillRect(self.rect(), QColor(80, 160, 255, 70))
+            p.setPen(QColor(255, 255, 255))
+            p.setFont(self.font_src)
+            p.drawText(self.rect().adjusted(8, 4, -8, -4),
+                       Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft,
+                       "拖动以移动字幕位置，完成后在托盘菜单取消“调整位置”")
+        wrap = int(Qt.AlignmentFlag.AlignHCenter | Qt.TextFlag.TextWrapAnywhere)
+        max_w = self.width() - 2 * PAD_X
+        fm_main, fm_src = QFontMetrics(self.font_main), QFontMetrics(self.font_src)
+        y = self.height()
+        for line in reversed(self.lines):  # newest at the bottom
+            main_rect = fm_main.boundingRect(QRect(0, 0, max_w, 10_000), wrap, line.text)
+            src_rect = QRect()
+            if self.cfg.show_source and line.source:
+                src_rect = fm_src.boundingRect(QRect(0, 0, max_w, 10_000), wrap, line.source)
+            box_w = max(main_rect.width(), src_rect.width()) + 2 * PAD_X
+            box_h = main_rect.height() + src_rect.height() + 2 * PAD_Y
+            y -= box_h
+            if y < 0:
+                break
+            box = QRectF((self.width() - box_w) / 2, y, box_w, box_h)
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(QColor(0, 0, 0, int(255 * self.cfg.opacity)))
+            p.drawRoundedRect(box, 6, 6)
+            top = int(y + PAD_Y)
+            if src_rect.height():
+                p.setFont(self.font_src)
+                p.setPen(QColor(200, 200, 200))
+                p.drawText(QRect(PAD_X, top, max_w, src_rect.height()), wrap, line.source)
+                top += src_rect.height()
+            p.setFont(self.font_main)
+            # Captions still being spoken are dimmer until they settle.
+            p.setPen(QColor(255, 255, 255) if line.final else QColor(210, 210, 210))
+            p.drawText(QRect(PAD_X, top, max_w, main_rect.height()), wrap, line.text)
+            y -= GAP
+        p.end()
+
+
+class Controller(QObject):
+    """Owns the pipeline and the translator, and rebuilds them when a menu
+    choice changes what they run on. Loading models takes seconds, so it
+    happens on a worker thread and reports back through signals."""
+
+    ready = Signal(str)   # name of the audio source now being captioned
+    failed = Signal(str)  # why (re)starting did not work
+
+    def __init__(self, app: QApplication, cfg: Config, glossary: Glossary, echo=None):
+        super().__init__()
+        self.app, self.cfg, self.glossary, self.echo = app, cfg, glossary, echo
+        self.window = CaptionWindow(cfg.overlay)
+        self.pipeline: Pipeline | None = None
+        self.translator = None
+        self.busy = False
+        self.exit_code = 0
+        self._reported: Pipeline | None = None  # pipeline whose error was already shown
+        self._welcomed = False
+        self.from_file = cfg.audio.source == "file"
+
+        self.tray = QSystemTrayIcon(app_icon(), app)
+        self.menu = QMenu()
+        self._build_menu()
+        self.tray.setContextMenu(self.menu)
+        self.tray.setToolTip("Valoroyce 实时字幕")
+        self.tray.activated.connect(self._on_tray_click)
+
+        self.ready.connect(self._on_ready)
+        self.failed.connect(self._on_failed)
+        self._watchdog = QTimer(self)
+        self._watchdog.timeout.connect(self._watch)
+        self._watchdog.start(200)
+
+    # -- menu ----------------------------------------------------------------
+
+    def _build_menu(self) -> None:
+        m, cfg = self.menu, self.cfg
+        self.status = QAction("正在启动…", m, enabled=False)
+        m.addAction(self.status)
+        m.addSeparator()
+
+        self.pause = QAction("暂停字幕", m, checkable=True)
+        self.pause.toggled.connect(self._set_paused)
+        move = QAction("调整位置", m, checkable=True)
+        move.toggled.connect(self.window.set_moving)
+        show_src = QAction("显示原文", m, checkable=True, checked=cfg.overlay.show_source)
+        show_src.toggled.connect(self._set_show_source)
+        m.addActions([self.pause, move, show_src])
+
+        sizes = m.addMenu("字号")
+        group = QActionGroup(sizes)
+        for label, size in FONT_SIZES:
+            a = QAction(label, sizes, checkable=True, checked=size == cfg.overlay.font_size)
+            a.triggered.connect(lambda _=False, s=size: self._set_font_size(s))
+            group.addAction(a)
+            sizes.addAction(a)
+
+        # Menus whose choice restarts something; greyed out while that happens.
+        self.restarting: list[QMenu] = []
+        if cfg.translate.backend == "llama":
+            run_on = m.addMenu("翻译运行在")
+            group = QActionGroup(run_on)
+            for label, gpu in (("显卡（更快）", True), ("CPU（不占用显卡）", False)):
+                a = QAction(label, run_on, checkable=True, checked=cfg.translate.gpu == gpu)
+                a.triggered.connect(lambda _=False, g=gpu: self._set_gpu(g))
+                group.addAction(a)
+                run_on.addAction(a)
+            self.restarting.append(run_on)
+        if not self.from_file:
+            self.devices = m.addMenu("声音来源")
+            self.devices.aboutToShow.connect(self._fill_devices)
+            self.restarting.append(self.devices)
+
+        m.addSeparator()
+        quit_action = QAction("退出", m)
+        quit_action.triggered.connect(self.app.quit)
+        m.addAction(quit_action)
+
+    def _fill_devices(self) -> None:
+        """Rebuilt on every open: headsets get plugged in mid-session."""
+        menu, current = self.devices, self.cfg.audio.device
+        menu.clear()
+        try:
+            names = [name for kind, name, _ in list_devices() if kind == "loopback"]
+        except Exception as e:
+            menu.addAction(QAction(f"无法列出设备：{e}", menu, enabled=False))
+            return
+        default = QAction("跟随系统默认设备", menu, checkable=True, checked=not current)
+        default.triggered.connect(lambda _=False: self._set_device(""))
+        menu.addAction(default)
+        menu.addSeparator()
+        for name in names:
+            chosen = bool(current) and current.lower() in name.lower()
+            a = QAction(name, menu, checkable=True, checked=chosen)
+            a.triggered.connect(lambda _=False, n=name: self._set_device(n))
+            menu.addAction(a)
+
+    def _on_tray_click(self, reason) -> None:
+        # Left click opens the same menu as right click.
+        if reason == QSystemTrayIcon.ActivationReason.Trigger:
+            self.menu.popup(QCursor.pos())
+
+    # -- menu actions ----------------------------------------------------------
+
+    def _set_paused(self, on: bool) -> None:
+        self.window.paused = on
+        if self.pipeline:
+            self.pipeline.paused = on
+        self.window.notice("字幕已暂停" if on else "字幕已恢复", 3.0)
+        self._refresh_status()
+
+    def _set_show_source(self, on: bool) -> None:
+        self.cfg.overlay.show_source = on
+        state.save(show_source=on)
+        self.window.update()
+
+    def _set_font_size(self, size: int) -> None:
+        state.save(font_size=size)
+        self.window.set_font_size(size)
+        self.window.notice("字幕大小预览", 3.0)
+
+    def _set_gpu(self, gpu: bool) -> None:
+        if gpu == self.cfg.translate.gpu:
+            return
+        self.cfg.translate.gpu = gpu
+        state.save(gpu=gpu)
+        self.start(new_translator=True, note="正在切换到" + ("显卡" if gpu else " CPU") + "…")
+
+    def _set_device(self, name: str) -> None:
+        if name == self.cfg.audio.device:
+            return
+        self.cfg.audio.device = name
+        state.save(device=name)
+        self.start(new_translator=False, note="正在切换声音来源…")
+
+    # -- starting and restarting -------------------------------------------------
+
+    def start(self, new_translator: bool = True, note: str = "正在加载模型，请稍候…") -> None:
+        if self.busy:
+            return
+        self.busy = True
+        for menu in self.restarting:
+            menu.setEnabled(False)
+        self.status.setText(note)
+        self.window.notice(note, 120.0)
+        threading.Thread(target=self._boot, args=(new_translator,), daemon=True).start()
+
+    def _boot(self, new_translator: bool) -> None:
+        try:
+            if self.pipeline:
+                self.pipeline.stop()
+                self.pipeline.join(3.0)
+                self.pipeline = None
+            if new_translator and self.translator:
+                self.translator.close()
+                self.translator = None
+            if self.translator is None:
+                self.translator = make_translator(
+                    self.cfg.translate, self.glossary, self.cfg.models_path
+                )
+            source = open_source(self.cfg.audio)
+            pipeline = Pipeline(self.cfg, source, self.translator, self.glossary, self._emit)
+            pipeline.paused = self.window.paused
+            pipeline.start()
+            self.pipeline = pipeline
+            self.ready.emit(str(getattr(source, "name", self.cfg.audio.file)))
+        except Exception as e:
+            self.failed.emit(str(e))
+
+    def _emit(self, c: Caption) -> None:
+        if self.echo:
+            self.echo(c)
+        self.window.caption.emit(c)
+
+    def _done_restarting(self) -> None:
+        self.busy = False
+        for menu in self.restarting:
+            menu.setEnabled(True)
+
+    def _on_ready(self, name: str) -> None:
+        self._done_restarting()
+        self.source_name = name
+        self._refresh_status()
+        self.window.notice(f"Valoroyce 已就绪 · 正在监听 {name}")
+        if not self._welcomed:
+            self._welcomed = True
+            self.tray.showMessage(
+                "Valoroyce 正在运行",
+                "点击这个图标可以调整字幕位置、切换声音来源或退出。",
+                app_icon(), 6000,
+            )
+
+    def _on_failed(self, why: str) -> None:
+        self._done_restarting()
+        print(f"error: {why}", file=sys.stderr, flush=True)
+        self.status.setText("未在运行（见提示）")
+        self.window.notice(f"启动失败：{why}", 60.0)
+        self.tray.showMessage("Valoroyce 启动失败", why, QSystemTrayIcon.MessageIcon.Warning, 10000)
+        if self.from_file:
+            self.exit_code = 1
+            self.app.quit()
+
+    def _refresh_status(self) -> None:
+        name = getattr(self, "source_name", "")
+        if name:
+            self.status.setText(("已暂停 · " if self.window.paused else "正在监听 · ") + name)
+
+    def _watch(self) -> None:
+        p = self.pipeline
+        if p is None or self.busy:
+            return
+        if p.error is not None and self._reported is not p:
+            self._reported = p
+            self._on_failed(str(p.error))
+        elif self.from_file and p.done.is_set():
+            self.app.quit()
+
+    def shutdown(self) -> None:
+        self.tray.hide()
+        if self.pipeline:
+            self.pipeline.stop()
+        if self.translator:
+            self.translator.close()
+
+
+def run_overlay(cfg: Config, glossary: Glossary, echo=None) -> int:
+    app = QApplication.instance() or QApplication(sys.argv[:1])
+    app.setQuitOnLastWindowClosed(False)
+    app.setWindowIcon(app_icon())
+    controller = Controller(app, cfg, glossary, echo)
+
+    # Let Ctrl+C in the console reach Python while Qt owns the main loop.
+    signal.signal(signal.SIGINT, lambda *_: app.quit())
+    if QSystemTrayIcon.isSystemTrayAvailable():
+        controller.tray.show()
+    else:
+        print("no system tray on this desktop: press Ctrl+C here to quit", file=sys.stderr)
+
+    controller.window.show()
+    controller.start()
+    try:
+        app.exec()
+    finally:
+        controller.shutdown()
+    return controller.exit_code
