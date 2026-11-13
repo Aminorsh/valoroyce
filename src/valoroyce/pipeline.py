@@ -197,6 +197,9 @@ class Pipeline:
                     # Never go silent: fall back to names-only substitution.
                     print(f"translation failed ({e}); showing glossary-only text", file=sys.stderr)
                     text = self.glossary.substitute(job.source)
+                if not text:
+                    # The model answered with nothing: show what was heard instead.
+                    text = self.glossary.substitute(job.source)
                 last_source, last_text = job.source, text
             if not job.final and job.utt <= self._final_utt:
                 continue  # the finished version of this utterance is already on its way

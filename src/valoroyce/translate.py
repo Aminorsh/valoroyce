@@ -44,7 +44,7 @@ class GlossaryTranslator:
 
 
 def build_messages(text: str, hits: list[Hit], cfg: TranslateConfig) -> list[dict[str, str]]:
-    pairs = [(h.source, h.term.zh) for h in hits]
+    pairs = [(h.source, h.zh) for h in hits]
     if cfg.prompt == "hy-mt":
         # Hy-MT's documented formats: plain, and "terminology intervention".
         prompt = ""

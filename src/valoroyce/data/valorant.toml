@@ -81,7 +81,7 @@ terms = [
   { zh = "日落之城", kind = "map", en = ["Sunset"], ja = ["サンセット"] },
   { zh = "幽邃地窟", kind = "map", en = ["Abyss"], ja = ["アビス"] },
   { zh = "盐海矿镇", kind = "map", en = ["Corrode"], ja = ["カロード"] },
-  { zh = "天枢云阙", kind = "map", en = ["Summit"], ja = ["サミット"] },  # ja unverified
+  { zh = "天枢云阙", kind = "map", en = ["Summit"], ja = ["サミット"] },
 
   # ---- callouts & slang (hints for the translator, never forced) -----------
   { zh = "爆能器", kind = "callout", en = ["Spike"], ja = ["スパイク"] },
@@ -105,15 +105,41 @@ terms = [
   { zh = "强起", kind = "callout", en = ["force buy", "force"], ja = ["フォースバイ", "フォース"] },
   { zh = "探头", kind = "callout", en = ["peek"], ja = ["ピーク"] },
   { zh = "补枪", kind = "callout", en = ["trade"], ja = ["トレード", "カバー"] },
-  { zh = "中路", kind = "callout", en = ["mid"], ja = ["ミッド"] },
+  { zh = "中路", kind = "callout", en = ["mid"], ja = ["ミッド", "中央"] },
   { zh = "长廊", kind = "callout", en = ["long"], ja = ["ロング"] },
   { zh = "短道", kind = "callout", en = ["short"], ja = ["ショート"] },
   { zh = "高台", kind = "callout", en = ["heaven"], ja = ["ヘブン"] },
   { zh = "高台下", kind = "callout", en = ["hell"], ja = ["ヘル"] },
   { zh = "包点", kind = "callout", en = ["site"], ja = ["サイト"] },
-  { zh = "匪家", kind = "callout", en = ["T spawn", "attacker spawn"], ja = ["アタッカースポーン", "Tスポーン"] },
-  { zh = "警家", kind = "callout", en = ["CT", "CT spawn", "defender spawn"], ja = ["ディフェンダースポーン"] },
+  { zh = "匪家", kind = "callout", en = ["T spawn", "attacker spawn"], ja = ["アタック側スポーン", "アタッカースポーン", "Tスポーン"] },
+  { zh = "警家", kind = "callout", en = ["CT", "CT spawn", "defender spawn"], ja = ["ディフェンス側スポーン", "ディフェンダースポーン"] },
   { zh = "残局", kind = "callout", en = ["clutch"], ja = ["クラッチ"] },
   { zh = "五杀", kind = "callout", en = ["ace"], ja = ["エース"] },
   { zh = "没关系", kind = "callout", en = ["nt", "nice try"], ja = ["ドンマイ", "ナイストライ"] },
+  { zh = "压上去", kind = "callout", en = ["push"], ja = ["プッシュ", "詰める"] },
+
+  # Place names as the Japanese client labels them on the minimap. The Chinese
+  # is a plain rendering, not checked against the Chinese client's own labels.
+  { zh = "主道", kind = "callout", en = ["main"], ja = ["メイン"] },
+  { zh = "大厅", kind = "callout", en = ["lobby"], ja = ["ロビー"] },
+  { zh = "连接", kind = "callout", en = ["link"], ja = ["リンク"] },
+  { zh = "窗口", kind = "callout", en = ["window"], ja = ["ウィンドウ"] },
+  { zh = "塔", kind = "callout", en = ["tower"], ja = ["タワー"] },
+  { zh = "花园", kind = "callout", en = ["garden"], ja = ["ガーデン"] },
+  { zh = "通道", kind = "callout", en = ["hall"], ja = ["ホール"] },
+  { zh = "洞穴", kind = "callout", en = ["cave"], ja = ["ケイヴ"] },
+  { zh = "喷泉", kind = "callout", en = ["fountain"], ja = ["ファウンテン"] },
+  { zh = "拐角", kind = "callout", en = ["bend"], ja = ["ベンド"] },
+  { zh = "下层", kind = "callout", en = ["bottom"], ja = ["ボトム"] },
+  { zh = "上层", kind = "callout", en = ["top"], ja = ["トップ"] },
+  { zh = "跳台", kind = "callout", en = ["drop"], ja = ["ドロップ"] },
+
+  # Words about how people play, which a general translator takes literally.
+  { zh = "开挂的", kind = "callout", en = ["cheater", "cheaters", "hacker", "hackers"], ja = ["チーター"] },
+  { zh = "外挂", kind = "callout", en = ["cheats", "hacks"], ja = ["チート"] },
+  { zh = "故意送", kind = "callout", en = ["throwing", "throw", "thrower"], ja = ["スロー"] },
+  { zh = "捣乱的", kind = "callout", en = ["troll", "trolling"], ja = ["トロール"] },
+  { zh = "炸鱼的小号", kind = "callout", en = ["smurf", "smurfing"], ja = ["スマーフ"] },
+  { zh = "挂机", kind = "callout", en = ["afk"], ja = ["放置"] },
+  { zh = "菜鸡", kind = "callout", en = ["noob", "bot"], ja = ["雑魚", "下手くそ"] },
 ]

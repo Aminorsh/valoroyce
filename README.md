@@ -2,9 +2,9 @@
 
 # Valoroyce
 
-无畏契约（VALORANT）队内语音的**离线**实时字幕：听日语 / 英语，在屏幕上显示中文，像看带字幕的视频一样打外服。
+中文 | [English](README.en.md)
 
-*Offline live captions for VALORANT voice chat: Japanese / English speech in, Chinese subtitles on screen. Speech recognition and translation both run on your own PC; nothing is uploaded.*
+无畏契约（VALORANT）队内语音的**离线**实时字幕：听日语 / 英语，在屏幕上显示中文，像看带字幕的视频一样打外服。
 
 ```
 你的电脑正在播放的声音 ──> 切句 ──> 语音识别 ──> 术语纠正 ──> 本地翻译模型 ──> 屏幕字幕
@@ -126,6 +126,7 @@ uv run --extra dev pytest                     # 跑测试
 - 英雄台词、技能语音会被当成人说话（见上面「只翻译队友语音」）。
 - 几个人同时说话会混成一句，目前不区分说话人。
 - 半句字幕会随着对方继续说而改写，偶尔会跳动。
+- 字幕不做任何过滤：队友骂人、说脏话或聊敏感话题，都会照原意翻译出来（脏话的语气可能比原话略轻）。
 - 游戏术语的识别主要靠事后纠正，生僻的说法还是可能识别错；遇到了请把「识别成了什么 / 实际是什么」提给我们，加进词表就能修好。
 
 ## 致谢与许可

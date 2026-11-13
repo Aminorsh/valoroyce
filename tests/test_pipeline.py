@@ -62,3 +62,19 @@ def test_partials_precede_the_final_and_share_its_number():
         by_utt.setdefault(c.utt, []).append(c.final)
     for flags in by_utt.values():
         assert flags[-1] is True and flags.count(True) == 1
+
+
+def test_empty_translation_falls_back_to_what_was_heard():
+    class Silent:
+        def translate(self, text, lang, hits):
+            return ""
+
+    cfg = Config(models_dir=str(MODELS))
+    glossary = Glossary.load()
+    captions = []
+    p = Pipeline(cfg, FileSource(str(WAVS / "ja.wav"), realtime=False), Silent(), glossary,
+                 captions.append)
+    p.start()
+    assert p.done.wait(60) and p.error is None
+    finals = [c for c in captions if c.final]
+    assert finals and all(c.text == glossary.substitute(c.source) for c in finals)

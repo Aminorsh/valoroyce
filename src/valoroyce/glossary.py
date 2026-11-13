@@ -74,6 +74,16 @@ class Term:
 class Hit:
     source: str  # the spelling as it appears in the sentence
     term: Term
+    site: str = ""  # "A" when the sentence says "Aメイン" / "A main"
+
+    @property
+    def zh(self) -> str:
+        return self.site + self.term.zh
+
+
+# A site letter directly before a place word belongs to it: without this the
+# translator is told "メイン = 主道" and drops the "A" from "Aメイン".
+_SITE = re.compile(r"(?<![A-Za-z])([A-Ca-c]) ?$")
 
 
 def _latin_pattern(spelling: str) -> re.Pattern[str]:
@@ -183,9 +193,12 @@ class Glossary:
                 if any(span[0] < e and s < span[1] for s, e in taken):
                     continue
                 taken.append(span)
-                if m.group(0).lower() not in seen:
-                    seen.add(m.group(0).lower())
-                    hits.append(Hit(m.group(0), term))
+                source, site = m.group(0), ""
+                if not term.forced and (pre := _SITE.search(text, 0, span[0])):
+                    source, site = text[pre.start():span[1]], pre.group(1).upper()
+                if source.lower() not in seen:
+                    seen.add(source.lower())
+                    hits.append(Hit(source, term, site))
         return hits
 
     # -- 3. make sure names came out in Chinese ------------------------------
@@ -204,5 +217,5 @@ class Glossary:
         """Glossary-only 'translation': swap every known term for its Chinese."""
         hits = self.find(text)
         for hit in sorted(hits, key=lambda h: -len(h.source)):
-            text = _pattern(hit.source).sub(hit.term.zh, text)
+            text = text.replace(hit.source, hit.zh)
         return text

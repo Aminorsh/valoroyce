@@ -9,7 +9,7 @@ def g():
 
 
 def zh(g, text):
-    return {h.source: h.term.zh for h in g.find(text)}
+    return {h.source: h.zh for h in g.find(text)}
 
 
 def test_builtin_names_are_unique(g):
@@ -84,3 +84,12 @@ def test_extra_file_overrides_builtin(tmp_path):
 
 def test_newest_map(g):
     assert zh(g, "Summit B site")["Summit"] == "天枢云阙"
+
+
+def test_site_letter_stays_with_the_place(g):
+    assert zh(g, "Aメイン二人、Bリンクに一人") == {"Aメイン": "A主道", "Bリンク": "B连接"}
+    assert zh(g, "push A main")["A main"] == "A主道"
+    assert zh(g, "メインから来る") == {"メイン": "主道"}
+    # Not a site letter: part of a word, or in front of a name.
+    assert "main" in zh(g, "data main")
+    assert zh(g, "Bジェット") == {"ジェット": "捷风"}
