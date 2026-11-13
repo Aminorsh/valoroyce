@@ -94,6 +94,7 @@ extra_body = { thinking = { type = "disabled" } }   # no "thinking": it is slow 
 - Only the sentence you type into the box is sent to the service. Teammates' voices and the captions never are.
 - It needs a network connection and is billed by the provider (a message is a few dozen tokens). About one second per message.
 - Online services may decline some sentences (political content, heavy profanity). When the service declines, is unreachable, or rejects the key, that one message is **translated by the local caption model instead**, and the box says so.
+- A message containing a word listed in `local_only` is never sent to the service; the local model translates it. The default list has one entry (see `config.example.toml`). Add any word the service handles badly: `local_only = ["word1", "word2"]`.
 - `config.toml` is ignored by git, but do not share a config file that contains your key. The key can also be given as the environment variable `VALOROYCE_COMPOSE_API_KEY`.
 
 **A second local model** (still fully offline): put a GGUF chat model (for example Qwen3.5-4B, Q4_K_M, about 2.7 GB) into the `models` folder, then:

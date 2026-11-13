@@ -134,6 +134,10 @@ class ComposeConfig:
     # Extra request fields, as in [translate]. A model that "thinks" before it
     # answers must have that switched off here, or replies come back empty.
     extra_body: dict = field(default_factory=dict)
+    # A message containing any of these words is translated by the caption
+    # model and never sent to the model above. Hosted services decline or
+    # alter sentences on some topics; list the words that give you trouble.
+    local_only: list[str] = field(default_factory=lambda: ["台湾"])
 
 
 @dataclass

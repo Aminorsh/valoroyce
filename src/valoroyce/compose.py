@@ -121,8 +121,8 @@ class ComposeWindow(QWidget):
             return
         self.result.setText(result)
         QGuiApplication.clipboard().setText(result)
-        if fell_back:  # the message model failed or declined; the caption model did this one
-            self.status.setText("已复制 · 这句改由字幕模型翻译（发消息的模型不可用或没有翻译）")
+        if fell_back:  # the caption model did this one: see ComposeWithFallback
+            self.status.setText("已复制 · 这句是本地字幕模型翻译的")
         else:
             self.status.setText("已复制 · 回到游戏聊天框按 Ctrl+V 粘贴")
         self.input.selectAll()

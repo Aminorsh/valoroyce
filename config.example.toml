@@ -114,3 +114,8 @@ timeout = 30.0
 # Extra request fields, as in [translate]. A model that "thinks" before answering
 # needs that switched off here, or replies come back empty.
 extra_body = {}
+# A message containing any of these words is translated by the caption model and
+# never sent to the model above. Hosted services decline or alter sentences on
+# some topics; list the words that give you trouble.
+# 包含这些词的句子不会发给上面的模型，直接由本地字幕模型翻译；可自行增减
+local_only = ["台湾"]

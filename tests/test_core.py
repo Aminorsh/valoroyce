@@ -257,6 +257,19 @@ def test_caption_model_takes_over_messages_the_other_model_fails_on(tmp_path):
     t.own._chat = unreachable
     assert t.compose("壹决在B长廊", "en") == "Iso在B long" and "cannot reach" in t.fell_back
 
+    # A sentence with a local_only word is never sent, whatever the other model would say.
+    def must_not_be_called(messages):
+        raise AssertionError("sent to the message model")
+    cfg.compose.local_only = ["B长廊", "Secret"]
+    kept = make_compose_translator(cfg, g, tmp_path, fallback=lambda: local)
+    kept.own._chat = must_not_be_called
+    assert kept.compose("壹决在B长廊", "en") == "Iso在B long" and "local_only" in kept.fell_back
+    assert kept.compose("a SECRET plan", "en") == "a SECRET plan"
+    not_ready = make_compose_translator(cfg, g, tmp_path, fallback=lambda: None)
+    not_ready.own._chat = must_not_be_called
+    with pytest.raises(RuntimeError, match="not ready"):
+        not_ready.compose("壹决在B长廊", "en")
+
     # Nothing to fall back to (captions still loading): the failure is reported.
     alone = make_compose_translator(cfg, g, tmp_path, fallback=lambda: None)
     alone.own._chat = unreachable

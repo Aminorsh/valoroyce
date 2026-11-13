@@ -263,16 +263,24 @@ class LlamaTranslator(ChatTranslator):
 
 class ComposeWithFallback:
     """Outgoing messages on a model of their own. When it cannot be reached,
-    or declines a sentence, the caption translator does that sentence."""
+    or declines a sentence, the caption translator does that sentence. So it
+    does for a sentence containing a `local_only` word, which is never sent."""
 
-    def __init__(self, own, fallback):
+    def __init__(self, own, fallback, local_only: list[str] = ()):
         self.own = own
         self.fallback = fallback  # () -> the caption translator, or None if there is none
+        self.local_only = [w.lower() for w in local_only if w]
         # Why the last message was done by the caption translator; "" if it was not.
         self.fell_back = ""
 
     def compose(self, text: str, lang: str) -> str:
         self.fell_back = ""
+        if any(w in text.lower() for w in self.local_only):
+            other = self.fallback()
+            if other is None:  # never the other model, not even as a last resort
+                raise RuntimeError("the local model is not ready yet; try again in a moment")
+            self.fell_back = "kept on this computer by local_only"
+            return other.compose(text, lang)
         try:
             return self.own.compose(text, lang)
         except Exception as e:
@@ -297,7 +305,7 @@ def make_compose_translator(cfg, glossary: Glossary, models: Path, fallback=None
         return own
     # Hosted models refuse some sentences; a model we run ourselves does not.
     own.may_decline = cfg.compose.backend == "openai"
-    return ComposeWithFallback(own, fallback)
+    return ComposeWithFallback(own, fallback, cfg.compose.local_only)
 
 
 def _compose_backend(cfg, glossary: Glossary, models: Path):
