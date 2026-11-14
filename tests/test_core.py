@@ -83,6 +83,35 @@ def test_capture_keeps_every_block_while_the_reader_is_busy(monkeypatch):
     assert source.lag() == 0.0
 
 
+def test_silence_made_up_while_audio_was_waiting_is_dropped():
+    import types
+
+    from valoroyce.audio import _no_false_silence
+
+    def recorder(waiting, chunks):
+        waiting, chunks = iter(waiting), iter(chunks)
+        return types.SimpleNamespace(_capture_available_frames=lambda: next(waiting),
+                                     _record_chunk=lambda: next(chunks))
+
+    zeros, sound = np.zeros(1920, dtype=np.float32), np.ones(480, dtype=np.float32)
+
+    late = recorder([0, 480], [zeros, sound])  # nothing, then audio after all
+    _no_false_silence(late)
+    assert late._record_chunk() is sound
+
+    silent = recorder([0, 0], [zeros])  # the device really is silent
+    _no_false_silence(silent)
+    assert silent._record_chunk() is zeros
+
+    busy = recorder([480, 480], [zeros])  # a silent packet from the device itself
+    _no_false_silence(busy)
+    assert busy._record_chunk() is zeros
+
+    other = types.SimpleNamespace()  # a backend without these internals
+    _no_false_silence(other)
+    assert not hasattr(other, "_record_chunk")
+
+
 def test_capture_failure_reaches_the_reader(monkeypatch):
     source = fake_source(monkeypatch, FakeDevice(blocks=3, fail=RuntimeError("device unplugged")))
     with pytest.raises(RuntimeError, match="device unplugged"):

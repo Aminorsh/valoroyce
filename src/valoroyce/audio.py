@@ -135,6 +135,30 @@ def list_devices() -> list[tuple[str, str, bool]]:
     return out
 
 
+def _no_false_silence(rec) -> None:
+    """Stop soundcard from splicing silence into live audio.
+
+    A silent device delivers nothing on Windows, so soundcard hands out zeros
+    once 40 ms pass without data. It goes by the clock alone: when the reading
+    thread was only kept waiting, the audio has arrived meanwhile and the zeros
+    end up in front of it (measured: about 50 ms every few seconds, in the
+    middle of words). Zeros are dropped when audio turns out to be waiting.
+    """
+    read = getattr(rec, "_record_chunk", None)
+    available = getattr(rec, "_capture_available_frames", None)
+    if read is None or available is None:
+        return  # another backend or version of soundcard: leave it alone
+
+    def record_chunk():
+        nothing_waiting = available() == 0
+        chunk = read()
+        if nothing_waiting and len(chunk) and not chunk.any() and available() > 0:
+            chunk = read()
+        return chunk
+
+    rec._record_chunk = record_chunk
+
+
 class DeviceSource:
     """Capture from an output device (loopback) or an input device (mic).
 
@@ -186,6 +210,7 @@ class DeviceSource:
             options["blocksize"] = int(self.CAPTURE_RATE * self.BUFFER_SECONDS)
         try:
             with self.mic.recorder(samplerate=self.CAPTURE_RATE, **options) as rec:
+                _no_false_silence(rec)
                 while not self._stop.is_set():
                     self._blocks.put(rec.record(numframes=frames))  # (frames, channels) float32
         except BaseException as e:  # hand the failure to whoever is reading
