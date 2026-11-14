@@ -6,6 +6,9 @@ an output device is playing (the same mechanism OBS uses).
 
 from __future__ import annotations
 
+import queue
+import sys
+import threading
 import time
 import wave
 from collections.abc import Iterator
@@ -84,6 +87,11 @@ class FileSource:
         samples, rate = read_wav(path)
         self.samples = Resampler(rate).process(samples)
         self.realtime = realtime
+        self._late = 0.0
+
+    def lag(self) -> float:
+        """Seconds the reader is behind the file's real-time schedule."""
+        return self._late
 
     def __iter__(self) -> Iterator[np.ndarray]:
         block = int(SAMPLE_RATE * BLOCK_SECONDS)
@@ -94,7 +102,9 @@ class FileSource:
                 delay = due - time.monotonic()
                 if delay > 0:
                     time.sleep(delay)
+                self._late = max(0.0, -delay)
             yield self.samples[i:i + block]
+        self._late = 0.0
         # Trailing silence so the VAD can close the last utterance.
         for _ in range(10):
             if self.realtime:
@@ -126,9 +136,18 @@ def list_devices() -> list[tuple[str, str, bool]]:
 
 
 class DeviceSource:
-    """Capture from an output device (loopback) or an input device (mic)."""
+    """Capture from an output device (loopback) or an input device (mic).
+
+    The device is read by a thread that does nothing else. Windows keeps only a
+    short buffer of captured audio and throws away what is not collected in
+    time, so reading must never wait for recognition. Blocks wait in a queue
+    instead, and `lag()` says how much audio is waiting.
+    """
 
     CAPTURE_RATE = 48000
+    # Buffer asked of Windows, for when the capture thread itself is held up.
+    # The default is one device period (10 ms).
+    BUFFER_SECONDS = 2.0
 
     def __init__(self, device: str = "", loopback: bool = True):
         sc = _soundcard()
@@ -150,19 +169,41 @@ class DeviceSource:
         else:
             self.mic = sc.default_microphone()
         self.name = self.mic.name
-        self._stop = False
+        self._stop = threading.Event()
+        self._blocks: queue.SimpleQueue = queue.SimpleQueue()
 
     def stop(self) -> None:
-        self._stop = True
+        self._stop.set()
+
+    def lag(self) -> float:
+        """Seconds of audio captured but not handed out yet."""
+        return self._blocks.qsize() * BLOCK_SECONDS
+
+    def _capture(self) -> None:
+        frames = int(self.CAPTURE_RATE * BLOCK_SECONDS)
+        options = {}
+        if sys.platform == "win32":  # elsewhere a large block size means late audio
+            options["blocksize"] = int(self.CAPTURE_RATE * self.BUFFER_SECONDS)
+        try:
+            with self.mic.recorder(samplerate=self.CAPTURE_RATE, **options) as rec:
+                while not self._stop.is_set():
+                    self._blocks.put(rec.record(numframes=frames))  # (frames, channels) float32
+        except BaseException as e:  # hand the failure to whoever is reading
+            self._blocks.put(e)
+        else:
+            self._blocks.put(None)
 
     def __iter__(self) -> Iterator[np.ndarray]:
         resampler = Resampler(self.CAPTURE_RATE)
-        frames = int(self.CAPTURE_RATE * BLOCK_SECONDS)
-        with self.mic.recorder(samplerate=self.CAPTURE_RATE) as rec:
-            while not self._stop:
-                data = rec.record(numframes=frames)  # (frames, channels) float32
-                mono = data.mean(axis=1) if data.ndim > 1 else data
-                yield resampler.process(mono)
+        threading.Thread(target=self._capture, name="capture", daemon=True).start()
+        while True:
+            data = self._blocks.get()
+            if data is None:
+                return
+            if isinstance(data, BaseException):
+                raise data
+            mono = data.mean(axis=1) if data.ndim > 1 else data
+            yield resampler.process(mono)
 
 
 def open_source(cfg: AudioConfig):

@@ -30,6 +30,65 @@ def test_resampler_removes_what_16k_cannot_carry():
     assert np.abs(out[200:]).max() < 0.05
 
 
+class FakeDevice:
+    """Stands in for a sound device: block k is filled with the value k."""
+
+    name = "fake"
+
+    def __init__(self, blocks, fail=None):
+        self.blocks, self.fail, self.given, self.source = blocks, fail, 0, None
+
+    def recorder(self, samplerate, **options):
+        return self
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def record(self, numframes):
+        if self.given == self.blocks:
+            if self.fail:
+                raise self.fail
+            self.source.stop()
+        self.given += 1
+        return np.full((numframes, 2), float(self.given - 1), dtype=np.float32)
+
+
+def fake_source(monkeypatch, device):
+    import types
+
+    from valoroyce import audio
+
+    sc = types.SimpleNamespace(default_speaker=lambda: types.SimpleNamespace(id="x"),
+                               get_microphone=lambda id, include_loopback: device)
+    monkeypatch.setattr(audio, "_soundcard", lambda: sc)
+    device.source = audio.DeviceSource()
+    return device.source
+
+
+def test_capture_keeps_every_block_while_the_reader_is_busy(monkeypatch):
+    import time
+
+    source = fake_source(monkeypatch, FakeDevice(blocks=30))
+    heard, lag = [], 0.0
+    for block in source:
+        if not heard:
+            time.sleep(0.2)  # a slow recognition pass: the device keeps delivering
+            lag = source.lag()
+        heard.append(float(np.median(block)))
+    assert lag >= 1.0  # ten or more 0.1 s blocks were waiting
+    assert heard == pytest.approx([float(k) for k in range(31)], abs=0.01)
+    assert source.lag() == 0.0
+
+
+def test_capture_failure_reaches_the_reader(monkeypatch):
+    source = fake_source(monkeypatch, FakeDevice(blocks=3, fail=RuntimeError("device unplugged")))
+    with pytest.raises(RuntimeError, match="device unplugged"):
+        list(source)
+
+
 def test_config_defaults_and_overrides(tmp_path):
     assert load_config(tmp_path / "nope.toml" if False else None).asr.languages == ["ja", "en"]
     f = tmp_path / "c.toml"

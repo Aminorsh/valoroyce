@@ -1,9 +1,11 @@
 """audio -> utterances -> text -> Chinese captions.
 
-Two threads. The listener captures, segments and recognises. The translator
+Two threads. The listener reads audio, segments and recognises. The translator
 drains a small job box. Translation is the slow step, so the box keeps only
 what is still worth showing: finished utterances in order, plus the newest
-in-progress one.
+in-progress one. A live source captures on a thread of its own and reports how
+much audio is waiting, so a slow recognition pass delays captions instead of
+losing sound.
 """
 
 from __future__ import annotations
@@ -23,6 +25,7 @@ from .speech import Recognizer, Segmenter
 
 MIN_PARTIAL_SECONDS = 0.6
 MAX_PENDING_FINALS = 3
+CATCH_UP_SECONDS = 0.25  # more unread audio than this: no partial captions
 
 
 @dataclass
@@ -148,6 +151,7 @@ class Pipeline:
         utt = 1
         last_partial_at = 0.0
         last_partial_text = ""
+        lag = getattr(self.source, "lag", None)  # seconds of audio waiting to be read
         for block in self.source:
             if self._stop.is_set():
                 break
@@ -155,13 +159,18 @@ class Pipeline:
                 continue
             if self.recording:
                 self.recording.audio(block)
-            now = time.monotonic()
+            waiting = lag() if lag else 0.0
+            now = time.monotonic() - waiting  # when this block was heard
             for seg in self.segmenter.feed(block):
                 # The VAD closes an utterance min_silence after the voice stops.
                 self._final_utt = utt
                 self._submit(seg.samples, utt, True, now - cfg.vad.min_silence)
                 utt += 1
                 last_partial_text = ""
+            if waiting > CATCH_UP_SECONDS:
+                # A recognition pass took longer than the audio it covered.
+                # Partials are optional: skip them until the reading is live again.
+                continue
             if cfg.asr.partial_interval <= 0 or now - last_partial_at < cfg.asr.partial_interval:
                 continue
             current = self.segmenter.current()

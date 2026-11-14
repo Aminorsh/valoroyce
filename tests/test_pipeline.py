@@ -102,6 +102,36 @@ def test_partials_precede_the_final_and_share_its_number():
         assert flags[-1] is True and flags.count(True) == 1
 
 
+def test_slow_recognition_does_not_fall_behind_the_audio():
+    import time
+
+    cfg = Config(models_dir=str(MODELS))
+    glossary = Glossary.load()
+    captions = []
+    source = FileSource(str(WAVS / "ja.wav"), realtime=True)
+    p = Pipeline(cfg, source, GlossaryTranslator(glossary), glossary, captions.append)
+    passes, real = [], p.recognizer.transcribe
+
+    def slow(samples):
+        time.sleep(1.0)  # twice the partial interval, on top of the real work
+        passes.append(len(samples))
+        return real(samples)
+
+    p.recognizer.transcribe = slow
+    audio_seconds = len(source.samples) / 16000
+    t0 = time.monotonic()
+    p.start()
+    assert p.done.wait(60) and p.error is None
+    spent = time.monotonic() - t0
+    # A pass per partial interval would take twice as long as the audio lasts.
+    # Passes are only made when the reading is live, so the delay stays at
+    # about one pass.
+    assert len(passes) <= audio_seconds / 1.0 + 2
+    assert spent < audio_seconds + 7.0
+    finals = [c for c in captions if c.final]
+    assert finals and "弁当" in finals[-1].source
+
+
 def test_empty_translation_falls_back_to_what_was_heard():
     class Silent:
         def translate(self, text, lang, hits):
