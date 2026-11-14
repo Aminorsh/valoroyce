@@ -7,6 +7,7 @@ run in "Windowed Fullscreen" (exclusive fullscreen hides every other window).
 
 from __future__ import annotations
 
+import os
 import signal
 import sys
 import threading
@@ -27,6 +28,7 @@ from .config import Config, OverlayConfig
 from .glossary import Glossary
 from .hotkey import GlobalHotkey
 from .pipeline import Caption, Pipeline
+from .record import Recording, describe
 from .translate import make_compose_translator, make_translator
 
 PAD_X, PAD_Y, GAP = 14, 6, 6
@@ -209,6 +211,7 @@ class Controller(QObject):
         self._reported: Pipeline | None = None  # pipeline whose error was already shown
         self._welcomed = False
         self.from_file = cfg.audio.source == "file"
+        self.recording: Recording | None = None
         # Optional separate model for outgoing messages, loaded on first use.
         self._big = None
         self._big_wanted = bool(cfg.compose.backend)
@@ -256,7 +259,9 @@ class Controller(QObject):
         move.toggled.connect(self.window.set_moving)
         show_src = QAction("显示原文", m, checkable=True, checked=cfg.overlay.show_source)
         show_src.toggled.connect(self._set_show_source)
-        m.addActions([self.pause, move, show_src])
+        self.record = QAction("录音用于反馈问题（最长 10 分钟）", m, checkable=True)
+        self.record.toggled.connect(self._set_recording)
+        m.addActions([self.pause, move, show_src, self.record])
 
         sizes = m.addMenu("字号")
         group = QActionGroup(sizes)
@@ -330,6 +335,34 @@ class Controller(QObject):
             self._big_wanted = False
         self._big_loading = False
 
+    def _set_recording(self, on: bool) -> None:
+        """Save what is heard and what is shown, for a problem report."""
+        if on:
+            try:
+                self.recording = Recording(
+                    header=describe(self.cfg, getattr(self, "source_name", "")))
+            except OSError as e:
+                self.window.notice(f"无法开始录音：{e}")
+                self.record.setChecked(False)
+                return
+            if self.pipeline:
+                self.pipeline.recording = self.recording
+            self.window.notice("开始录音 · 在托盘菜单里再点一次停止")
+        elif self.recording:
+            done, self.recording = self.recording, None
+            if self.pipeline:
+                self.pipeline.recording = None
+            done.close()
+            folder = done.wav_path.parent.resolve()
+            self.window.notice(f"录音已保存到 {folder}")
+            self.tray.showMessage("录音已保存", f"{done.wav_path.name} 和 {done.log_path.name}\n{folder}",
+                                  app_icon(), 8000)
+            if hasattr(os, "startfile"):  # Windows: show the two files in Explorer
+                try:
+                    os.startfile(folder)
+                except OSError:
+                    pass
+
     def _on_tray_click(self, reason) -> None:
         # Left click opens the same menu as right click.
         if reason == QSystemTrayIcon.ActivationReason.Trigger:
@@ -396,6 +429,7 @@ class Controller(QObject):
             source = open_source(self.cfg.audio)
             pipeline = Pipeline(self.cfg, source, self.translator, self.glossary, self._emit)
             pipeline.paused = self.window.paused
+            pipeline.recording = self.recording  # a restart does not end a recording
             pipeline.start()
             self.pipeline = pipeline
             self.ready.emit(str(getattr(source, "name", self.cfg.audio.file)))
@@ -441,6 +475,8 @@ class Controller(QObject):
             self.status.setText(("已暂停 · " if self.window.paused else "正在监听 · ") + name)
 
     def _watch(self) -> None:
+        if self.recording and self.recording.closed:  # it reached its time limit
+            self.record.setChecked(False)
         p = self.pipeline
         if p is None or self.busy:
             return
@@ -459,11 +495,13 @@ class Controller(QObject):
             self.hotkey.release()
         if self.pipeline:
             self.pipeline.stop()
+        if self.recording:
+            self.recording.close()
         if self.translator:
             self.translator.close()
 
 
-def run_overlay(cfg: Config, glossary: Glossary, echo=None) -> int:
+def run_overlay(cfg: Config, glossary: Glossary, echo=None, record: bool = False) -> int:
     app = QApplication.instance() or QApplication(sys.argv[:1])
     app.setQuitOnLastWindowClosed(False)
     app.setWindowIcon(app_icon())
@@ -477,6 +515,8 @@ def run_overlay(cfg: Config, glossary: Glossary, echo=None) -> int:
         print("no system tray on this desktop: press Ctrl+C here to quit", file=sys.stderr)
 
     controller.window.show()
+    if record:
+        controller.record.setChecked(True)
     controller.start()
     try:
         app.exec()

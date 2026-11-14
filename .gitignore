@@ -16,6 +16,8 @@ dist/
 
 # Runtime logs.
 *.log
+# Recordings made for problem reports (tray menu or `run --record`).
+recordings/
 
 # OS noise.
 .DS_Store

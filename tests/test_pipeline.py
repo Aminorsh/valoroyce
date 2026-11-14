@@ -55,6 +55,44 @@ def test_unexpected_language_is_decoded_as_the_default():
     assert all(c.lang == "ja" for c in finals)
 
 
+def test_recording_holds_the_audio_heard_and_the_captions_shown(tmp_path):
+    from valoroyce.audio import read_wav
+    from valoroyce.record import Recording, describe
+
+    cfg = Config(models_dir=str(MODELS))
+    glossary = Glossary.load()
+    shown = []
+    p = Pipeline(cfg, FileSource(str(WAVS / "ja.wav"), realtime=False), GlossaryTranslator(glossary),
+                 glossary, shown.append)
+    rec = p.recording = Recording(tmp_path, describe(cfg, "ja.wav"))
+    p.start()
+    assert p.done.wait(60) and p.error is None
+    rec.close()
+
+    original, _ = read_wav(str(WAVS / "ja.wav"))
+    saved, rate = read_wav(str(rec.wav_path))
+    assert rate == 16000 and len(saved) >= len(original)   # plus the trailing silence
+    assert abs(saved[:len(original)] - original).max() < 1e-3
+    lines = [l.split("\t") for l in rec.log_path.read_text(encoding="utf-8").splitlines()
+             if not l.startswith("#")]
+    assert len(lines) == len(shown) and lines[-1][1] == "final" and "弁当" in lines[-1][5]
+    assert any("min_silence" in l for l in rec.log_path.read_text(encoding="utf-8").splitlines()[:6])
+
+
+def test_recording_stops_by_itself(tmp_path, monkeypatch):
+    import numpy as np
+
+    from valoroyce import record
+
+    monkeypatch.setattr(record, "MAX_SECONDS", 0.5)
+    rec = record.Recording(tmp_path)
+    for _ in range(10):
+        rec.audio(np.zeros(1600, dtype=np.float32))
+    assert rec.closed and 0.5 <= rec.seconds < 0.7
+    rec.audio(np.zeros(1600, dtype=np.float32))  # ignored, no error
+    rec.close()
+
+
 def test_partials_precede_the_final_and_share_its_number():
     cfg_caps = run("ja.wav", partial_interval=0.3)
     by_utt = {}

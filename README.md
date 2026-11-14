@@ -163,6 +163,7 @@ uv run valoroyce devices                      # 列出音频设备
 uv run valoroyce run --file some.wav          # 用录音文件测试
 uv run valoroyce run --no-overlay             # 不开悬浮窗，字幕打印在终端
 uv run valoroyce run --cpu                    # 本次运行不使用显卡
+uv run valoroyce run --record                 # 把听到的声音和字幕存到 recordings/，反馈问题用
 uv run valoroyce translate "アイソがロングにいる"   # 直接测试术语和翻译
 uv run valoroyce say --to en "保安在B点"        # 中文 → 日语 / 英语
 uv run --extra dev pytest                     # 跑测试
@@ -175,6 +176,15 @@ uv run --extra dev pytest                     # 跑测试
 - 半句字幕会随着对方继续说而改写，偶尔会跳动。
 - 字幕不做任何过滤：队友骂人、说脏话或聊敏感话题，都会照原意翻译出来（脏话的语气可能比原话略轻）。
 - 游戏术语的识别主要靠事后纠正，生僻的说法还是可能识别错；遇到了请把「识别成了什么 / 实际是什么」提给我们，加进词表就能修好。
+
+### 字幕不对时：录一段发给我们
+
+识别错、翻译错、几句话粘在一起时，最有用的反馈是一段录音。在托盘菜单勾选「录音用于反馈问题」，让问题重现一会儿，再点一次停止（最长 10 分钟，到时自动停）。程序会在 `recordings` 文件夹里存两个同名文件并打开这个文件夹：
+
+- `.wav`：程序听到的声音，和交给识别模型的一模一样
+- `.txt`：当时显示过的每一条字幕（识别出的原文、译文、时间）
+
+录音只保存在你的电脑上，不会上传。里面有别人的声音，要不要发给别人由你决定。命令行里也可以用 `uv run valoroyce run --record`。
 
 ## 致谢与许可
 

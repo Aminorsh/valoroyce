@@ -186,6 +186,15 @@ uv run --extra dev pytest                     # run the tests
 - Captions are not filtered. Insults, swearing and sensitive topics are translated as said (strong language may come out slightly milder than the original).
 - Game terms are fixed mostly after recognition, so unusual phrasings can still be misheard. If you see one, tell us what was heard and what was said; adding it to the glossary fixes it.
 
+### When captions are wrong: send a recording
+
+For wrong recognition, wrong translation or sentences glued together, the most useful report is a recording. Tick "录音用于反馈问题" (record for a problem report) in the tray menu, let the problem happen for a while, and click it again to stop (10 minutes at most, then it stops by itself). Two files with the same name appear in the `recordings` folder, which is opened for you:
+
+- `.wav`: the sound the program heard, exactly as it was given to the recogniser
+- `.txt`: every caption that was shown (text heard, translation, time)
+
+Recordings stay on your computer; nothing is uploaded. They contain other people's voices, so sharing them is your decision. From the command line: `uv run valoroyce run --record`.
+
 ## Contributing
 
 Help is welcome, especially from anyone who can run it on Windows with the game.
@@ -215,6 +224,7 @@ Everything is in `src/valoroyce/`. Each stage lives in one file and knows nothin
 | `pipeline.py` | Threads and queues tying the stages together; decides which captions are still worth translating |
 | `overlay.py` | The caption window, the tray menu, and restarting the pipeline when a menu choice changes |
 | `compose.py` | The message box: Chinese in, Japanese or English out to the clipboard |
+| `record.py` | Opt-in recording for problem reports: the audio as heard plus the captions shown |
 | `hotkey.py` | The system-wide shortcut that opens the message box (Windows) |
 | `state.py` | Remembered tray-menu choices |
 | `config.py` | All settings and their defaults |

@@ -47,14 +47,20 @@ def cmd_run(args) -> int:
     if cfg.overlay.enabled:
         from .overlay import run_overlay
 
-        return run_overlay(cfg, glossary, echo=_print_caption)
+        return run_overlay(cfg, glossary, echo=_print_caption, record=args.record)
 
     source = open_source(cfg.audio)
     translator = make_translator(cfg.translate, glossary, cfg.models_path)
+    recording = None
     try:
         pipeline = Pipeline(cfg, source, translator, glossary, _print_caption)
-        pipeline.start()
         name = getattr(source, "name", cfg.audio.file)
+        if args.record:
+            from .record import Recording, describe
+
+            recording = pipeline.recording = Recording(header=describe(cfg, str(name)))
+            print(f"recording to {recording.wav_path}", file=sys.stderr, flush=True)
+        pipeline.start()
         print(f"listening: {name}  (Ctrl+C to quit)", file=sys.stderr, flush=True)
         try:
             while not pipeline.done.wait(0.2):
@@ -67,6 +73,10 @@ def cmd_run(args) -> int:
         return 0
     finally:
         translator.close()
+        if recording:
+            recording.close()
+            print(f"recording saved: {recording.wav_path} and {recording.log_path.name}",
+                  file=sys.stderr)
 
 
 def cmd_setup(args) -> int:
@@ -150,6 +160,8 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--backend", choices=["llama", "openai", "none"], help="translation backend")
     r.add_argument("--cpu", action="store_true", help="keep the translation model off the GPU")
     r.add_argument("--no-overlay", action="store_true", help="print captions to the console only")
+    r.add_argument("--record", action="store_true",
+                   help="save what is heard and the captions shown to ./recordings (for problem reports)")
     r.set_defaults(fn=cmd_run)
 
     s = sub.add_parser("setup", help="download models and the llama.cpp runtime")

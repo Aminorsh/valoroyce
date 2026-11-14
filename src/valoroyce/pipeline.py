@@ -100,6 +100,7 @@ class Pipeline:
         self._box = _JobBox()
         self._stop = threading.Event()
         self.paused = False  # audio is still read, so nothing piles up, but ignored
+        self.recording = None  # a record.Recording while a problem report is being made
         self._final_utt = 0  # highest utterance whose final caption was requested
         self._threads = [
             threading.Thread(target=self._guard, args=(self._listen,), name="listen", daemon=True),
@@ -152,6 +153,8 @@ class Pipeline:
                 break
             if self.paused:
                 continue
+            if self.recording:
+                self.recording.audio(block)
             now = time.monotonic()
             for seg in self.segmenter.feed(block):
                 # The VAD closes an utterance min_silence after the voice stops.
@@ -204,8 +207,9 @@ class Pipeline:
             if not job.final and job.utt <= self._final_utt:
                 continue  # the finished version of this utterance is already on its way
             if text:
-                self.on_caption(
-                    Caption(job.utt, job.source, text, job.lang, job.final,
-                            time.monotonic() - job.t_ref)
-                )
+                caption = Caption(job.utt, job.source, text, job.lang, job.final,
+                                  time.monotonic() - job.t_ref)
+                if self.recording:
+                    self.recording.caption(caption)
+                self.on_caption(caption)
         self.done.set()
