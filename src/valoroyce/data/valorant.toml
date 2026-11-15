@@ -102,7 +102,7 @@ terms = [
   { zh = "回防", kind = "callout", en = ["retake"], ja = ["リテイク"] },
   { zh = "转点", kind = "callout", en = ["rotate"], ja = ["ローテ", "ローテート"] },
   { zh = "一波冲", kind = "callout", en = ["rush"], ja = ["ラッシュ"] },
-  { zh = "残血", kind = "callout", en = ["low", "one shot"], ja = ["ロー", "ワンショット", "ミリ"] },
+  { zh = "残血", kind = "callout", en = ["low", "one shot"], ja = ["ロー", "ワンショット", "ミリ"], zh_alias = ["大残"] },
   { zh = "半血", kind = "callout", en = ["half"], ja = ["ハーフ"] },
   { zh = "经济局", kind = "callout", en = ["eco"], ja = ["エコ"] },
   { zh = "保枪", kind = "callout", en = ["save"], ja = ["セーブ"] },
@@ -119,6 +119,8 @@ terms = [
   { zh = "匪家", kind = "callout", en = ["T spawn", "attacker spawn"], ja = ["アタック側スポーン", "アタッカースポーン", "Tスポーン"] },
   # Chinese players say "CT" too, so it stays as it is. Recognisers hear it as "city".
   { zh = "CT", kind = "callout", en = ["CT", "CT spawn", "defender spawn"], ja = ["シーティー", "ディフェンス側スポーン", "ディフェンダースポーン"], mishear = ["シティ", "シティー", "city"], zh_alias = ["警家"] },
+  # "他们家" is how Chinese players say it whichever side the enemy is on.
+  { zh = "敌方重生点", kind = "callout", en = ["enemy spawn", "their spawn"], ja = ["敵スポーン", "相手スポーン"], zh_alias = ["他们家"] },  # ja unverified
   { zh = "残局", kind = "callout", en = ["clutch"], ja = ["クラッチ"] },
   { zh = "五杀", kind = "callout", en = ["ace"], ja = ["エース"] },
   { zh = "没关系", kind = "callout", en = ["nt", "nice try"], ja = ["ドンマイ", "ナイストライ"] },

@@ -70,6 +70,18 @@ def test_ct_heard_as_city(g):
     assert g.outgoing("人在警家", "en") == ("人在CT", [("CT", "CT")])
 
 
+def test_their_home_means_the_enemy_spawn(g):
+    # Typed Chinese: "他们家" is the enemy's spawn, not somebody's house.
+    assert g.outgoing("一个在他们家", "en") == ("一个在敌方重生点", [("敌方重生点", "enemy spawn")])
+    assert g.outgoing("一个在他们家", "ja") == ("一个在敌方重生点", [("敌方重生点", "敵スポーン")])
+    assert zh(g, "敵スポーンに一人") == {"敵スポーン": "敌方重生点"}
+
+
+def test_low_health_as_players_say_it(g):
+    assert g.outgoing("捷风大残", "en") == ("捷风残血", [("捷风", "Jett"), ("残血", "low")])
+    assert g.outgoing("A大残了一个", "ja")[0] == "A残血了一个"
+
+
 def test_enforce_replaces_untranslated_names_only(g):
     hits = g.find("Jett is low")
     assert g.enforce("Jett 残血了", hits) == "捷风 残血了"
