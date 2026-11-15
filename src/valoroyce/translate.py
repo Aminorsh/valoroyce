@@ -231,6 +231,11 @@ class LlamaTranslator(ChatTranslator):
             cmd, stdout=self._log, stderr=subprocess.STDOUT, creationflags=flags,
             cwd=str(server.parent),
         )
+        handle = getattr(self.proc, "_handle", None)  # Windows: the handle Popen holds for its child
+        if handle is not None:
+            from .fullspeed import full_speed
+
+            full_speed(int(handle))
         self._wait_ready()
 
     def _wait_ready(self, timeout: float = 120.0) -> None:

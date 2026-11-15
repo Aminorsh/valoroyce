@@ -23,9 +23,11 @@ def _load(args) -> tuple[Config, Glossary]:
 
 def cmd_run(args) -> int:
     from .audio import open_source
+    from .fullspeed import full_speed
     from .pipeline import Pipeline
     from .translate import make_translator
 
+    full_speed()  # the game is in front; Windows would run us in its efficiency mode
     cfg, glossary = _load(args)
     if args.no_overlay:
         cfg.overlay.enabled = False

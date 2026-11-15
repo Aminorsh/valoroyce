@@ -436,3 +436,10 @@ def test_the_kept_stream_stays_small_and_positions_stay_right():
         assert len(lead._audio) <= 4 * SR
     seg = lead.segment(59 * SR, SR // 2, finished=True)
     assert np.array_equal(seg.samples, stream[59 * SR - n:59 * SR + SR // 2])
+
+def test_full_speed_is_asked_for_on_windows_and_harmless_elsewhere():
+    import sys
+
+    from valoroyce.fullspeed import full_speed
+
+    assert full_speed() is (sys.platform == "win32")

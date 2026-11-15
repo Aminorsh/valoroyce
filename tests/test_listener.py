@@ -242,3 +242,21 @@ def test_the_audio_before_the_speech_does_not_count_as_speech():
     recognizer = FakeRecognizer(script)
     listener = Listener(OneBlip(), recognizer, Config())
     assert listener.feed(np.zeros(1600, dtype=np.float32)) == [] and not recognizer.heard
+
+def test_a_partial_on_screen_is_finished_even_if_the_last_pass_hears_nothing():
+    script = Script(("スモーク出すからみんなでBに入ろう", 3.0), (None, 1.0))
+    cfg = Config()
+    cfg.asr.partial_interval = 0.5
+    recognizer = FakeRecognizer(script)
+    listener = Listener(FakeSegmenter(cfg.vad.min_silence), recognizer, cfg)
+    hears = recognizer.transcribe
+    reports, n = [], SR // 10
+    for i in range(0, len(script.samples), n):
+        if i >= 3 * SR:  # the speaker has stopped: from here on the recogniser trusts nothing
+            recognizer.transcribe = lambda samples: Transcript("", "ja")
+        reports += listener.feed(script.samples[i:i + n])
+    assert hears is not recognizer.transcribe
+    partials = [h for h in reports if not h.final]
+    assert partials and reports[-1].final
+    assert reports[-1].text == partials[-1].text and reports[-1].utt == partials[-1].utt
+    assert listener.utt == partials[-1].utt + 1  # the next utterance gets a number of its own

@@ -82,6 +82,7 @@ class Listener:
         self._finished_to = 0            # position in the stream up to which speech is finished
         self._previous: list[str] = []   # the unfinished phrases as the last look had them
         self._reported = ""              # the partial text last reported for this utterance
+        self._reported_lang = ""
 
     def feed(self, block: np.ndarray, live: bool = True) -> list[Heard]:
         """Add audio. `live` is False while the reader is behind the source:
@@ -120,12 +121,16 @@ class Listener:
 
     def _finish(self, seg: Segment, age: float) -> list[Heard]:
         audio, _, spoken = self._rest(seg)
-        self._previous, self._reported = [], ""
-        if spoken < MIN_REST_SECONDS * SAMPLE_RATE:
-            return []
-        heard = self.recognizer.transcribe(audio)
-        if not heard.has_content:
-            return []
+        shown, self._previous, self._reported = self._reported, [], ""
+        heard = None
+        if spoken >= MIN_REST_SECONDS * SAMPLE_RATE:
+            heard = self.recognizer.transcribe(audio)
+        if heard is None or not heard.has_content:
+            if not shown:
+                return []
+            # The last pass heard nothing it trusts, but a partial caption of
+            # this utterance is on screen: two looks agreed on it, so it stands.
+            heard = Transcript(shown, self._reported_lang)
         self.utt += 1
         return [Heard(self.utt - 1, heard.text, heard.lang, True, age)]
 
@@ -154,6 +159,6 @@ class Listener:
             steady = Transcript(_steady(join(texts, heard.lang), before,
                                         spaced=heard.lang not in ("ja", "zh")), heard.lang)
             if steady.has_content and len(_letters(steady.text)) > len(_letters(self._reported)):
-                self._reported = steady.text
+                self._reported, self._reported_lang = steady.text, steady.lang
                 out.append(Heard(self.utt, steady.text, steady.lang, False, 0.0))
         return out
