@@ -117,7 +117,8 @@ terms = [
   { zh = "高台下", kind = "callout", en = ["hell"], ja = ["ヘル"] },
   { zh = "包点", kind = "callout", en = ["site"], ja = ["サイト"], zh_alias = ["点", "区"] },
   { zh = "匪家", kind = "callout", en = ["T spawn", "attacker spawn"], ja = ["アタック側スポーン", "アタッカースポーン", "Tスポーン"] },
-  { zh = "警家", kind = "callout", en = ["CT", "CT spawn", "defender spawn"], ja = ["ディフェンス側スポーン", "ディフェンダースポーン"] },
+  # Chinese players say "CT" too, so it stays as it is. Recognisers hear it as "city".
+  { zh = "CT", kind = "callout", en = ["CT", "CT spawn", "defender spawn"], ja = ["シーティー", "ディフェンス側スポーン", "ディフェンダースポーン"], mishear = ["シティ", "シティー", "city"], zh_alias = ["警家"] },
   { zh = "残局", kind = "callout", en = ["clutch"], ja = ["クラッチ"] },
   { zh = "五杀", kind = "callout", en = ["ace"], ja = ["エース"] },
   { zh = "没关系", kind = "callout", en = ["nt", "nice try"], ja = ["ドンマイ", "ナイストライ"] },

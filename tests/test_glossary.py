@@ -58,7 +58,16 @@ def test_latin_matching_is_case_insensitive_and_whole_word(g):
 
 def test_longer_spelling_wins(g):
     hits = zh(g, "they are CT spawn")
-    assert hits == {"CT spawn": "警家"}
+    assert hits == {"CT spawn": "CT"}
+
+
+def test_ct_heard_as_city(g):
+    # "CT" said aloud sounds like "city" and is written that way.
+    assert g.correct("he is city") == "he is CT"
+    assert g.correct("シティにいる") == "シーティーにいる"
+    assert zh(g, g.correct("シティーに一人")) == {"シーティー": "CT"}
+    assert g.correct("キャパシティ") == "キャパシティ"
+    assert g.outgoing("人在警家", "en") == ("人在CT", [("CT", "CT")])
 
 
 def test_enforce_replaces_untranslated_names_only(g):
