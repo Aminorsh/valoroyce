@@ -73,6 +73,27 @@ SPEECH_ASSETS = [
     ),
 ]
 
+# Whisper large-v3-turbo converted for CTranslate2; both sources hold the same files.
+_WHISPER = "mobiuslabsgmbh/faster-whisper-large-v3-turbo"
+WHISPER_DIR = "whisper-large-v3-turbo"
+WHISPER_ASSETS = [
+    Asset(
+        f"{WHISPER_DIR}/{name}",
+        {"global": [f"{_HF}/{_WHISPER}/resolve/main/{name}"],
+         "cn": [f"{_MS}/{_WHISPER}/resolve/master/{name}"]},
+        sha256=sha256, size=size, note=note,
+    )
+    for name, sha256, size, note in [
+        ("config.json", "b0253ea6c0d3bea6b1e19e91a02acfd3b53f4467362efcb5a3e6b16c9b3a9b7e", 2_263, ""),
+        ("preprocessor_config.json",
+         "7ccc62c6f2765af1f3b46c00c9b5894426835a05021c8b9c01eecb6dfb542711", 340, ""),
+        ("tokenizer.json", "297b13372ac43916285644fb9687add3cc62ee2a1adb60da3dc25cc94c1871fd", 2_710_337, ""),
+        ("vocabulary.json", "c69260f2ab26d659b7c398f9a2b2b48ed0df16c3b47d7326782fd9cba71690c1", 1_068_114, ""),
+        ("model.bin", "e76620f83d5f5b69efd3d87e3dc180c1bd21df9fbebacfd4335e5e1efcc018da", 1_617_884_929,
+         "speech recognition on the graphics card (Whisper large-v3-turbo)"),
+    ]
+]
+
 LLM_ASSET = Asset(
     "Hy-MT2-1.8B-Q4_K_M.gguf",
     {
@@ -226,10 +247,11 @@ def _extract(archive: Path, target: Path) -> None:
             t.extractall(target, filter="data")
 
 
-def run_setup(models: Path, mirror: str = "auto", gpu: str = "vulkan", skip_llm: bool = False) -> int:
+def run_setup(models: Path, mirror: str = "auto", gpu: str = "vulkan", skip_llm: bool = False,
+              whisper: bool = False) -> int:
     models.mkdir(parents=True, exist_ok=True)
     print(f"models directory: {models.resolve()}")
-    for asset in SPEECH_ASSETS:
+    for asset in SPEECH_ASSETS + (WHISPER_ASSETS if whisper else []):
         download(asset, models, mirror)
     if not skip_llm:
         download(LLM_ASSET, models, mirror)

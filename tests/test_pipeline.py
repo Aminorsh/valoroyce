@@ -18,10 +18,29 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-def run(wav, **asr):
+def config(backend="sensevoice", **asr):
+    # The recogniser is named, not left to "auto": the same tests must mean the
+    # same thing on a machine with a graphics card and on one without.
     cfg = Config(models_dir=str(MODELS))
+    cfg.asr.backend = backend
     for k, v in asr.items():
         setattr(cfg.asr, k, v)
+    return cfg
+
+
+def _no_whisper():
+    from valoroyce.speech import whisper_unavailable
+
+    return whisper_unavailable(MODELS, Config().asr)
+
+
+BACKENDS = ["sensevoice",
+            pytest.param("whisper", marks=pytest.mark.skipif(bool(_no_whisper()),
+                                                             reason=f"Whisper: {_no_whisper()}"))]
+
+
+def run(wav, **asr):
+    cfg = config(**asr)
     glossary = Glossary.load()
     captions, lock = [], threading.Lock()
 
@@ -37,21 +56,24 @@ def run(wav, **asr):
     return captions
 
 
-def test_japanese_file_yields_final_caption():
-    finals = [c for c in run("ja.wav") if c.final]
+@pytest.mark.parametrize("backend", BACKENDS)
+def test_japanese_file_yields_final_caption(backend):
+    finals = [c for c in run("ja.wav", backend=backend) if c.final]
     assert finals and all(c.lang == "ja" for c in finals)
     assert "弁当" in "".join(c.source for c in finals)
 
 
-def test_english_file_is_detected_as_english():
-    finals = [c for c in run("en.wav") if c.final]
+@pytest.mark.parametrize("backend", BACKENDS)
+def test_english_file_is_detected_as_english(backend):
+    finals = [c for c in run("en.wav", backend=backend) if c.final]
     assert finals and all(c.lang == "en" for c in finals)
     assert "tribal" in " ".join(c.source for c in finals).lower()
 
 
-def test_unexpected_language_is_decoded_as_the_default():
+@pytest.mark.parametrize("backend", BACKENDS)
+def test_unexpected_language_is_decoded_as_the_default(backend):
     # Korean audio with ja/en expected: must come back labelled ja, not ko.
-    finals = [c for c in run("ko.wav") if c.final]
+    finals = [c for c in run("ko.wav", backend=backend) if c.final]
     assert all(c.lang == "ja" for c in finals)
 
 
@@ -59,7 +81,7 @@ def test_recording_holds_the_audio_heard_and_the_captions_shown(tmp_path):
     from valoroyce.audio import read_wav
     from valoroyce.record import Recording, describe
 
-    cfg = Config(models_dir=str(MODELS))
+    cfg = config()
     glossary = Glossary.load()
     shown = []
     p = Pipeline(cfg, FileSource(str(WAVS / "ja.wav"), realtime=False), GlossaryTranslator(glossary),
@@ -105,7 +127,7 @@ def test_partials_precede_the_final_and_share_its_number():
 def test_slow_recognition_does_not_fall_behind_the_audio():
     import time
 
-    cfg = Config(models_dir=str(MODELS))
+    cfg = config()
     glossary = Glossary.load()
     captions = []
     source = FileSource(str(WAVS / "ja.wav"), realtime=True)
@@ -137,7 +159,7 @@ def test_empty_translation_falls_back_to_what_was_heard():
         def translate(self, text, lang, hits):
             return ""
 
-    cfg = Config(models_dir=str(MODELS))
+    cfg = config()
     glossary = Glossary.load()
     captions = []
     p = Pipeline(cfg, FileSource(str(WAVS / "ja.wav"), realtime=False), Silent(), glossary,

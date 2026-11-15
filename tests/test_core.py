@@ -366,3 +366,73 @@ def test_caption_model_takes_over_messages_the_other_model_fails_on(tmp_path):
     alone.own._chat = lambda messages: ""
     with pytest.raises(Declined):
         alone.compose("你好", "ja")
+
+
+def test_whisper_without_its_model_says_what_to_do(tmp_path, capsys):
+    from valoroyce import speech
+
+    cfg = Config().asr
+    assert "valoroyce setup --whisper" in speech.whisper_unavailable(tmp_path, cfg)
+    cfg.backend = "whisper"
+    with pytest.raises(RuntimeError, match=r"setup --whisper.*sensevoice"):
+        speech.make_recognizer(tmp_path, cfg)
+    cfg.backend = "cloud"
+    with pytest.raises(ValueError, match="asr.backend"):
+        speech.make_recognizer(tmp_path, cfg)
+    # "auto" goes on with the CPU recogniser and says why; here that one is missing too.
+    cfg.backend = "auto"
+    with pytest.raises(FileNotFoundError, match="valoroyce setup"):
+        speech.make_recognizer(tmp_path, cfg)
+    assert "Whisper is not used because" in capsys.readouterr().err
+
+
+def test_setup_puts_whisper_where_the_recogniser_looks():
+    from valoroyce.setup import WHISPER_ASSETS, WHISPER_DIR
+
+    assert WHISPER_DIR == Config().asr.whisper_model
+    names = {a.dest for a in WHISPER_ASSETS}
+    assert f"{WHISPER_DIR}/model.bin" in names and len(names) == 5
+    assert all(a.sha256 and a.size and a.urls["global"] and a.urls["cn"] for a in WHISPER_ASSETS)
+
+
+def test_subtitle_credits_are_recognised_as_made_up():
+    from valoroyce.speech import _CREDITS
+
+    for text in ("ご視聴ありがとうございました", "チャンネル登録お願いします", "次回予告",
+                 "Thanks for watching!", "Thank you for watching."):
+        assert _CREDITS.search(text), text
+    for text in ("ありがとう", "ナイス", "thank you", "watch mid"):
+        assert not _CREDITS.search(text), text
+
+def test_an_utterance_comes_with_the_audio_just_before_it():
+    from valoroyce.config import SAMPLE_RATE as SR
+    from valoroyce.speech import LEAD_SECONDS, Lead
+
+    lead, n = Lead(keep_seconds=10), int(LEAD_SECONDS * SR)
+    stream = np.arange(6 * SR, dtype=np.float32)
+    lead.add(stream[:3 * SR])
+    # In progress and finished, an utterance starts at the same place.
+    early = lead.segment(SR, SR, finished=False)
+    first = lead.segment(SR, 2 * SR, finished=True)
+    assert early.start == first.start == SR - n and first.lead == n
+    assert np.array_equal(first.samples, stream[SR - n:3 * SR])
+    # The next one starts so soon that the full lead would repeat the first.
+    lead.add(stream[3 * SR:])
+    second = lead.segment(3 * SR + n // 2, SR, finished=True)
+    assert second.start == 3 * SR and second.lead == n // 2
+    assert np.array_equal(second.samples, stream[3 * SR:4 * SR + n // 2])
+    # Speech at the very start of the stream has nothing before it.
+    assert Lead(keep_seconds=10).segment(0, 0, finished=False).lead == 0
+
+
+def test_the_kept_stream_stays_small_and_positions_stay_right():
+    from valoroyce.config import SAMPLE_RATE as SR
+    from valoroyce.speech import LEAD_SECONDS, Lead
+
+    lead, n = Lead(keep_seconds=2), int(LEAD_SECONDS * SR)
+    stream = np.arange(60 * SR, dtype=np.float32)
+    for i in range(0, len(stream), SR // 10):
+        lead.add(stream[i:i + SR // 10])
+        assert len(lead._audio) <= 4 * SR
+    seg = lead.segment(59 * SR, SR // 2, finished=True)
+    assert np.array_equal(seg.samples, stream[59 * SR - n:59 * SR + SR // 2])

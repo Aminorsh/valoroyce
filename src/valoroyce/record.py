@@ -30,7 +30,7 @@ def describe(cfg: Config, source: str) -> list[str]:
         f"source: {cfg.audio.source} / {source}",
         f"vad: threshold={v.threshold} min_silence={v.min_silence} "
         f"min_speech={v.min_speech} max_speech={v.max_speech}",
-        f"asr: languages={a.languages} partial_interval={a.partial_interval}",
+        f"asr: backend={a.backend} languages={a.languages} partial_interval={a.partial_interval}",
         f"translate: backend={t.backend} prompt={t.prompt} gpu={t.gpu} partials={t.partials}",
     ]
 

@@ -40,14 +40,28 @@ class VadConfig:
 
 @dataclass
 class AsrConfig:
-    # Languages we expect, first = default. Anything SenseVoice detects outside
-    # this list is re-decoded as the default language.
+    # Which recogniser listens.
+    #   "whisper"     Whisper on an NVIDIA graphics card: the accurate one. Needs
+    #                 its model (`valoroyce setup --whisper`) and about 1.3 GB
+    #                 of the card's memory.
+    #   "sensevoice"  SenseVoice on the CPU: works everywhere, much less accurate
+    #                 on real voice chat.
+    #   "auto"        Whisper when it can run here, otherwise SenseVoice.
+    backend: str = "auto"
+    # Languages we expect, first = default. Speech detected as anything else is
+    # recognised again as the likeliest of these.
     languages: list[str] = field(default_factory=lambda: ["ja", "en"])
-    # While someone is still talking, re-decode this often to show a live caption.
-    # 0 disables partial captions.
-    partial_interval: float = 0.5
+    # While someone is still talking, recognise again this often (seconds of
+    # audio): it shows a live caption and finishes phrases of a long sentence
+    # early. 0 = captions only when the speaker pauses.
+    partial_interval: float = 1.0
+    # Whisper: the model's folder inside models_dir, and how its numbers are
+    # held on the card ("int8_float16" needs half the memory of "float16").
+    whisper_model: str = "whisper-large-v3-turbo"
+    whisper_compute: str = "int8_float16"
+    # SenseVoice: CPU threads, and the onnxruntime provider ("cpu", "cuda" or
+    # "directml"; the last two need a matching build).
     num_threads: int = 2
-    # onnxruntime provider: "cpu", "cuda" or "directml" (needs a matching build).
     provider: str = "cpu"
 
 

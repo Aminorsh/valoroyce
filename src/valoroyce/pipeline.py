@@ -1,11 +1,11 @@
 """audio -> utterances -> text -> Chinese captions.
 
-Two threads. The listener reads audio, segments and recognises. The translator
-drains a small job box. Translation is the slow step, so the box keeps only
-what is still worth showing: finished utterances in order, plus the newest
-in-progress one. A live source captures on a thread of its own and reports how
-much audio is waiting, so a slow recognition pass delays captions instead of
-losing sound.
+Two threads. The listener reads audio and recognises it (`listener.py` decides
+what is finished and what is still being said). The translator drains a small
+job box. Translation is the slow step, so the box keeps only what is still
+worth showing: finished speech in order, plus the newest unfinished piece. A
+live source captures on a thread of its own and reports how much audio is
+waiting, so a slow recognition pass delays captions instead of losing sound.
 """
 
 from __future__ import annotations
@@ -21,9 +21,9 @@ import numpy as np
 
 from .config import Config
 from .glossary import Glossary, Hit
-from .speech import Recognizer, Segmenter
+from .listener import Heard, Listener
+from .speech import Segmenter, make_recognizer
 
-MIN_PARTIAL_SECONDS = 0.6
 MAX_PENDING_FINALS = 3
 CATCH_UP_SECONDS = 0.25  # more unread audio than this: no partial captions
 
@@ -92,6 +92,7 @@ class Pipeline:
         translator,
         glossary: Glossary,
         on_caption: Callable[[Caption], None],
+        recognizer=None,  # one that is already loaded, when the pipeline is rebuilt
     ):
         self.cfg = cfg
         self.source = source
@@ -99,7 +100,7 @@ class Pipeline:
         self.glossary = glossary
         self.on_caption = on_caption
         self.segmenter = Segmenter(cfg.models_path, cfg.vad)
-        self.recognizer = Recognizer(cfg.models_path, cfg.asr)
+        self.recognizer = recognizer or make_recognizer(cfg.models_path, cfg.asr)
         self._box = _JobBox()
         self._stop = threading.Event()
         self.paused = False  # audio is still read, so nothing piles up, but ignored
@@ -138,19 +139,15 @@ class Pipeline:
 
     # -- listener ------------------------------------------------------------
 
-    def _submit(self, samples: np.ndarray, utt: int, final: bool, t_ref: float) -> str:
-        heard = self.recognizer.transcribe(samples)
-        if not heard.has_content:
-            return ""
+    def _heard(self, heard: Heard, now: float) -> None:
         text = self.glossary.correct(heard.text)
-        self._box.put(_Job(utt, text, heard.lang, self.glossary.find(text), final, t_ref))
-        return text
+        if heard.final:
+            self._final_utt = heard.utt
+        self._box.put(_Job(heard.utt, text, heard.lang, self.glossary.find(text), heard.final,
+                           now - heard.age))
 
     def _listen(self) -> None:
-        cfg = self.cfg
-        utt = 1
-        last_partial_at = 0.0
-        last_partial_text = ""
+        listener = Listener(self.segmenter, self.recognizer, self.cfg)
         lag = getattr(self.source, "lag", None)  # seconds of audio waiting to be read
         for block in self.source:
             if self._stop.is_set():
@@ -161,34 +158,13 @@ class Pipeline:
                 self.recording.audio(block)
             waiting = lag() if lag else 0.0
             now = time.monotonic() - waiting  # when this block was heard
-            for seg in self.segmenter.feed(block):
-                # The VAD closes an utterance min_silence after the voice stops.
-                self._final_utt = utt
-                self._submit(seg.samples, utt, True, now - cfg.vad.min_silence)
-                utt += 1
-                last_partial_text = ""
-            if waiting > CATCH_UP_SECONDS:
-                # A recognition pass took longer than the audio it covered.
-                # Partials are optional: skip them until the reading is live again.
-                continue
-            if cfg.asr.partial_interval <= 0 or now - last_partial_at < cfg.asr.partial_interval:
-                continue
-            current = self.segmenter.current()
-            if current is None or current.duration < MIN_PARTIAL_SECONDS:
-                continue
-            last_partial_at = now
-            if cfg.translate.partials:
-                heard = self.recognizer.transcribe(current.samples)
-                text = self.glossary.correct(heard.text) if heard.has_content else ""
-                if text and text != last_partial_text:
-                    last_partial_text = text
-                    self._box.put(
-                        _Job(utt, text, heard.lang, self.glossary.find(text), False, now)
-                    )
-        for seg in self.segmenter.flush():
-            self._final_utt = utt
-            self._submit(seg.samples, utt, True, time.monotonic())
-            utt += 1
+            # A recognition pass that took longer than the audio it covered
+            # leaves audio waiting: only finished speech is recognised until
+            # the reading is live again.
+            for heard in listener.feed(block, live=waiting <= CATCH_UP_SECONDS):
+                self._heard(heard, now)
+        for heard in listener.flush():
+            self._heard(heard, time.monotonic())
         self._box.close()
 
     # -- translator ------------------------------------------------------------

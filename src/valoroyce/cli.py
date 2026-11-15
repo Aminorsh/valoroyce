@@ -61,7 +61,8 @@ def cmd_run(args) -> int:
             recording = pipeline.recording = Recording(header=describe(cfg, str(name)))
             print(f"recording to {recording.wav_path}", file=sys.stderr, flush=True)
         pipeline.start()
-        print(f"listening: {name}  (Ctrl+C to quit)", file=sys.stderr, flush=True)
+        print(f"listening: {name}, recognising with {pipeline.recognizer.name}  (Ctrl+C to quit)",
+              file=sys.stderr, flush=True)
         try:
             while not pipeline.done.wait(0.2):
                 pass
@@ -83,7 +84,8 @@ def cmd_setup(args) -> int:
     from .setup import run_setup
 
     cfg = load_config(args.config)
-    return run_setup(cfg.models_path, mirror=args.mirror, gpu=args.gpu, skip_llm=args.no_llm)
+    return run_setup(cfg.models_path, mirror=args.mirror, gpu=args.gpu, skip_llm=args.no_llm,
+                     whisper=args.whisper)
 
 
 def cmd_devices(args) -> int:
@@ -170,6 +172,8 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--gpu", choices=["vulkan", "cuda", "cpu"], default="vulkan",
                    help="llama.cpp build for Windows (vulkan works on any modern GPU)")
     s.add_argument("--no-llm", action="store_true", help="skip the translation model")
+    s.add_argument("--whisper", action="store_true",
+                   help="also fetch Whisper (1.6 GB): accurate recognition on an NVIDIA graphics card")
     s.set_defaults(fn=cmd_setup)
 
     d = sub.add_parser("devices", help="list audio devices")

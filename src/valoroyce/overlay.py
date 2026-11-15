@@ -28,6 +28,7 @@ from .config import Config, OverlayConfig
 from .glossary import Glossary
 from .hotkey import GlobalHotkey
 from .pipeline import Caption, Pipeline
+from .speech import make_recognizer
 from .record import Recording, describe
 from .translate import make_compose_translator, make_translator
 
@@ -205,6 +206,7 @@ class Controller(QObject):
         self.app, self.cfg, self.glossary, self.echo = app, cfg, glossary, echo
         self.window = CaptionWindow(cfg.overlay)
         self.pipeline: Pipeline | None = None
+        self.recognizer = None
         self.translator = None
         self.busy = False
         self.exit_code = 0
@@ -427,7 +429,10 @@ class Controller(QObject):
                     self.cfg.translate, self.glossary, self.cfg.models_path
                 )
             source = open_source(self.cfg.audio)
-            pipeline = Pipeline(self.cfg, source, self.translator, self.glossary, self._emit)
+            if self.recognizer is None:  # loaded once: restarts keep it
+                self.recognizer = make_recognizer(self.cfg.models_path, self.cfg.asr)
+            pipeline = Pipeline(self.cfg, source, self.translator, self.glossary, self._emit,
+                                recognizer=self.recognizer)
             pipeline.paused = self.window.paused
             pipeline.recording = self.recording  # a restart does not end a recording
             pipeline.start()
@@ -450,7 +455,7 @@ class Controller(QObject):
         self._done_restarting()
         self.source_name = name
         self._refresh_status()
-        self.window.notice(f"Valoroyce 已就绪 · 正在监听 {name}")
+        self.window.notice(f"Valoroyce 已就绪 · 正在监听 {name} · 语音识别 {self.recognizer.label}")
         if not self._welcomed:
             self._welcomed = True
             self.tray.showMessage(
