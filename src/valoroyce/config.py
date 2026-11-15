@@ -109,8 +109,11 @@ class OverlayConfig:
     enabled: bool = True
     font_family: str = "Microsoft YaHei"
     font_size: int = 22
-    # How many captions stay on screen, and for how long after they finish.
+    # How many rows of captions are on screen at most. The newest caption is
+    # always there (its end, if it is longer than that); older ones stay while
+    # they fit. More rows reach further up the screen, towards the crosshair.
     max_lines: int = 3
+    # Seconds a caption stays after it is finished.
     linger: float = 6.0
     # Show the recognised Japanese/English above the Chinese.
     show_source: bool = False

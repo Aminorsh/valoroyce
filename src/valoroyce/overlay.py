@@ -30,6 +30,7 @@ from .hotkey import GlobalHotkey
 from .pipeline import Caption, Pipeline
 from .speech import make_recognizer
 from .record import Recording, describe
+from .rows import arrange, newest
 from .translate import make_compose_translator, make_translator
 
 PAD_X, PAD_Y, GAP = 14, 6, 6
@@ -94,8 +95,10 @@ class CaptionWindow(QWidget):
     def _place(self) -> None:
         screen = QApplication.primaryScreen().geometry()
         width = int(screen.width() * self.cfg.width)
+        # Room for max_lines rows of captions, each with a row of the original
+        # and a box of its own: the tallest the strip can ever be.
         line_h = QFontMetrics(self.font_main).height() + QFontMetrics(self.font_src).height()
-        height = (line_h + 2 * PAD_Y + GAP) * self.cfg.max_lines * 2
+        height = (line_h + 2 * PAD_Y + GAP) * self.cfg.max_lines
         x = screen.x() + int(screen.width() * self.cfg.x) - width // 2
         bottom = screen.y() + int(screen.height() * self.cfg.y)
         saved = state.load()
@@ -161,34 +164,41 @@ class CaptionWindow(QWidget):
             p.drawText(self.rect().adjusted(8, 4, -8, -4),
                        Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft,
                        "拖动以移动字幕位置，完成后在托盘菜单取消“调整位置”")
-        wrap = int(Qt.AlignmentFlag.AlignHCenter | Qt.TextFlag.TextWrapAnywhere)
+        centre = int(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop)
         max_w = self.width() - 2 * PAD_X
         fm_main, fm_src = QFontMetrics(self.font_main), QFontMetrics(self.font_src)
+        # A fixed number of rows: the strip never grows towards the crosshair.
+        shown = arrange([ln.text for ln in self.lines], fm_main.horizontalAdvance, max_w,
+                        self.cfg.max_lines)
         y = self.height()
-        for line in reversed(self.lines):  # newest at the bottom
-            main_rect = fm_main.boundingRect(QRect(0, 0, max_w, 10_000), wrap, line.text)
-            src_rect = QRect()
+        for line, main_rows in zip(reversed(self.lines), reversed(shown)):  # newest at the bottom
+            if not main_rows:
+                continue
+            src_rows = []
             if self.cfg.show_source and line.source:
-                src_rect = fm_src.boundingRect(QRect(0, 0, max_w, 10_000), wrap, line.source)
-            box_w = max(main_rect.width(), src_rect.width()) + 2 * PAD_X
-            box_h = main_rect.height() + src_rect.height() + 2 * PAD_Y
+                # The original gets as many rows as its caption, and shows its end too.
+                src_rows = newest(line.source, fm_src.horizontalAdvance, max_w, len(main_rows))
+            widest = max([fm_main.horizontalAdvance(r) for r in main_rows]
+                         + [fm_src.horizontalAdvance(r) for r in src_rows])
+            box_w = widest + 2 * PAD_X
+            box_h = len(main_rows) * fm_main.height() + len(src_rows) * fm_src.height() + 2 * PAD_Y
             y -= box_h
-            if y < 0:
-                break
             box = QRectF((self.width() - box_w) / 2, y, box_w, box_h)
             p.setPen(Qt.PenStyle.NoPen)
             p.setBrush(QColor(0, 0, 0, int(255 * self.cfg.opacity)))
             p.drawRoundedRect(box, 6, 6)
             top = int(y + PAD_Y)
-            if src_rect.height():
-                p.setFont(self.font_src)
-                p.setPen(QColor(200, 200, 200))
-                p.drawText(QRect(PAD_X, top, max_w, src_rect.height()), wrap, line.source)
-                top += src_rect.height()
+            p.setFont(self.font_src)
+            p.setPen(QColor(200, 200, 200))
+            for row in src_rows:
+                p.drawText(QRect(0, top, self.width(), fm_src.height()), centre, row)
+                top += fm_src.height()
             p.setFont(self.font_main)
             # Captions still being spoken are dimmer until they settle.
             p.setPen(QColor(255, 255, 255) if line.final else QColor(210, 210, 210))
-            p.drawText(QRect(PAD_X, top, max_w, main_rect.height()), wrap, line.text)
+            for row in main_rows:
+                p.drawText(QRect(0, top, self.width(), fm_main.height()), centre, row)
+                top += fm_main.height()
             y -= GAP
         p.end()
 

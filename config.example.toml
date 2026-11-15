@@ -90,6 +90,9 @@ fuzzy = true
 enabled = true
 font_family = "Microsoft YaHei"
 font_size = 22
+# Rows of captions on screen at most; older captions leave first, and one that
+# is longer shows its end. More rows reach further up, towards the crosshair.
+# 屏幕上最多几行字幕：旧的先消失，过长的一条只显示后半；行数越多越往上挡视野
 max_lines = 3
 # Seconds a finished caption stays. 整句字幕停留秒数
 linger = 6.0

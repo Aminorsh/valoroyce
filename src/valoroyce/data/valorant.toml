@@ -37,7 +37,7 @@ terms = [
   { zh = "夜露", kind = "agent", en = ["Yoru"], ja = ["ヨル"] },
   { zh = "星礈", kind = "agent", en = ["Astra"], ja = ["アストラ"] },
   { zh = "K/O", kind = "agent", en = ["KAY/O", "KAYO"], ja = ["ケイオー", "ケーオー"], mishear = ["K.O.", "KO"], zh_alias = ["KO"] },
-  { zh = "尚勃勒", kind = "agent", en = ["Chamber"], ja = ["チェンバー"] },
+  { zh = "尚勃勒", kind = "agent", en = ["Chamber"], ja = ["チェンバー"], zh_alias = ["钱包"] },
   { zh = "霓虹", kind = "agent", en = ["Neon"], ja = ["ネオン"] },
   { zh = "黑梦", kind = "agent", en = ["Fade"], ja = ["フェイド"] },
   { zh = "海神", kind = "agent", en = ["Harbor"], ja = ["ハーバー"] },

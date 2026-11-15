@@ -443,3 +443,27 @@ def test_full_speed_is_asked_for_on_windows_and_harmless_elsewhere():
     from valoroyce.fullspeed import full_speed
 
     assert full_speed() is (sys.platform == "win32")
+
+def test_the_caption_strip_never_holds_more_rows_than_allowed():
+    from valoroyce.rows import ELLIPSIS, arrange, newest, wrap
+
+    one = len  # every character is one unit wide
+    assert wrap("一二三四五六七", one, 3) == ["一二三", "四五六", "七"]
+    assert wrap("jett is low", one, 5) == ["jett", "is lo", "w"]
+    assert wrap("", one, 3) == [] and wrap("短", one, 3) == ["短"]
+    # Too long for the strip: the end, after an ellipsis, in exactly the rows there are.
+    assert newest("一二三四五六七八九十", one, 3, 2) == [ELLIPSIS + "六七", "八九十"]
+    assert newest("一二三四", one, 3, 2) == ["一二三", "四"]
+    # Newest last. Older captions stay while they fit whole.
+    assert arrange(["甲", "乙", "丙"], one, 3, 3) == [["甲"], ["乙"], ["丙"]]
+    assert arrange(["甲", "乙乙乙乙", "丙"], one, 3, 3) == [[], ["乙乙乙", "乙"], ["丙"]]
+    # One that does not fit whole leaves, and so does everything older.
+    assert arrange(["甲", "乙乙乙乙乙乙乙", "丙"], one, 3, 3) == [[], [], ["丙"]]
+    assert arrange(["甲", "乙乙乙乙乙乙乙乙乙乙"], one, 3, 3) == [[], [ELLIPSIS + "乙乙", "乙乙乙", "乙乙乙"]]
+    for texts in (["甲" * 40, "乙" * 7, "丙" * 11], ["甲"] * 6, []):
+        assert sum(len(rows) for rows in arrange(texts, one, 5, 3)) <= 3
+
+
+def test_wallet_is_chamber_in_typed_messages():
+    text, pairs = Glossary.load().outgoing("钱包在A点", "ja")
+    assert ("尚勃勒", "チェンバー") in pairs and "钱包" not in text
