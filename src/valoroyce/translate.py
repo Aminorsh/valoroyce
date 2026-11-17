@@ -207,6 +207,23 @@ def find_gguf(models: Path, name: str = "") -> Path:
     return found[0]
 
 
+def _port_free(host: str, port: int) -> None:
+    """Fail with what to do when something already listens where our server
+    should. Otherwise our llama-server cannot start, or we would talk to a
+    stranger."""
+    import socket
+
+    with socket.socket() as s:
+        s.settimeout(0.5)
+        if s.connect_ex((host, port)) != 0:
+            return
+    raise RuntimeError(
+        f"port {port} is already in use, probably by a llama-server.exe left running by an "
+        f"earlier start. End llama-server.exe in Task Manager (or restart the PC), then start "
+        f"again. If another program needs that port, change [translate] base_url in config.toml."
+    )
+
+
 class LlamaTranslator(ChatTranslator):
     """ChatTranslator plus a llama-server child process that we own."""
 
@@ -216,6 +233,7 @@ class LlamaTranslator(ChatTranslator):
         server = find_llama_server(models).resolve()
         model = find_gguf(models, cfg.model_file).resolve()
         parsed = urlparse(cfg.base_url)
+        _port_free(parsed.hostname or "127.0.0.1", parsed.port or 8177)
         cmd = [
             str(server), "-m", str(model),
             "--host", parsed.hostname or "127.0.0.1", "--port", str(parsed.port or 8177),
@@ -233,8 +251,10 @@ class LlamaTranslator(ChatTranslator):
         )
         handle = getattr(self.proc, "_handle", None)  # Windows: the handle Popen holds for its child
         if handle is not None:
+            from .desktop import end_with_us
             from .fullspeed import full_speed
 
+            end_with_us(int(handle))  # never left running after we end
             full_speed(int(handle))
         self._wait_ready()
 

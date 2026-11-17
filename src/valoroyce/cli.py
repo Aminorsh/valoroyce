@@ -148,6 +148,19 @@ def cmd_say(args) -> int:
     return 0
 
 
+def cmd_quit(args) -> int:
+    from PySide6.QtCore import QCoreApplication
+
+    from .desktop import SingleInstance
+
+    _app = QCoreApplication.instance() or QCoreApplication([])
+    if SingleInstance.ask_running("quit"):
+        print("asked the running copy to quit")
+        return 0
+    print("Valoroyce is not running")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     for stream in (sys.stdout, sys.stderr):  # Windows consoles default to a legacy codepage
         if hasattr(stream, "reconfigure"):
@@ -192,6 +205,9 @@ def main(argv: list[str] | None = None) -> int:
     y.add_argument("--backend", choices=["llama", "openai", "none"])
     y.set_defaults(fn=cmd_say)
 
+    q = sub.add_parser("quit", help="end the running copy (its tray menu's 退出)")
+    q.set_defaults(fn=cmd_quit)
+
     args = p.parse_args(argv)
     if not args.cmd:
         args = p.parse_args([*(argv if argv is not None else sys.argv[1:]), "run"])
@@ -202,5 +218,67 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
 
+def _end(code: int) -> None:
+    """End the process at once, after our own cleanup. With Whisper on the
+    graphics card and the caption window, the libraries' own teardown crashes
+    the process (0xC0000409 in Python's shutdown, 0xC0000005 in the exit
+    routines of the loaded DLLs, which even os._exit runs). Our files are
+    closed by now, so on Windows the process is ended without running them."""
+    import os
+
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.flush()
+        except (AttributeError, OSError, ValueError):
+            pass
+    if sys.platform == "win32":
+        import ctypes
+
+        try:
+            kernel32 = ctypes.WinDLL("kernel32")
+            kernel32.GetCurrentProcess.restype = ctypes.c_void_p
+            kernel32.TerminateProcess(ctypes.c_void_p(kernel32.GetCurrentProcess()),
+                                      ctypes.c_uint(code & 0xFFFFFFFF))
+        except (AttributeError, OSError):
+            pass
+    os._exit(code)
+
+
+def entry() -> None:
+    """The `valoroyce` command."""
+    _end(main())
+
+
+def gui() -> None:
+    """`valoroyce-gui`: the same program started without a console window, as
+    from a shortcut. Output goes to valoroyce.log, errors to a message box."""
+    from .desktop import log_to_file, message_box
+
+    try:
+        log = log_to_file()
+    except OSError as e:
+        message_box("Valoroyce 无法启动",
+                    f"无法写入日志文件：{e}\n\n请把 Valoroyce 放在你有写入权限的文件夹里（例如“文档”），再启动一次。")
+        _end(1)
+    print(f"--- start {time.strftime('%Y-%m-%d %H:%M:%S')} ---", flush=True)
+    import faulthandler
+
+    faulthandler.enable(sys.stderr)  # a crash in a library leaves its trace in the log
+    try:
+        code = main(sys.argv[1:] or ["run"])
+    except SystemExit as e:  # argparse
+        code = e.code if isinstance(e.code, int) else 1
+    except BaseException:
+        import traceback
+
+        traceback.print_exc()
+        code = 1
+    if code:
+        message_box("Valoroyce 出错了",
+                    f"程序因为错误退出了。详细信息在这个文件里：\n{log.resolve()}\n\n"
+                    "最后几行通常写着原因和该怎么做。如果看不懂，把这个文件发给开发者。")
+    _end(code)
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    entry()

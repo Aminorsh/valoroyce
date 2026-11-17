@@ -195,9 +195,16 @@ class DeviceSource:
         self.name = self.mic.name
         self._stop = threading.Event()
         self._blocks: queue.SimpleQueue = queue.SimpleQueue()
+        self._thread: threading.Thread | None = None
 
     def stop(self) -> None:
         self._stop.set()
+
+    def join(self, timeout: float | None = None) -> None:
+        """Wait for the capture to let go of the device. Ending the process
+        while it is inside a Windows audio call crashes it."""
+        if self._thread is not None:
+            self._thread.join(timeout)
 
     def lag(self) -> float:
         """Seconds of audio captured but not handed out yet."""
@@ -220,7 +227,8 @@ class DeviceSource:
 
     def __iter__(self) -> Iterator[np.ndarray]:
         resampler = Resampler(self.CAPTURE_RATE)
-        threading.Thread(target=self._capture, name="capture", daemon=True).start()
+        self._thread = threading.Thread(target=self._capture, name="capture", daemon=True)
+        self._thread.start()
         while True:
             data = self._blocks.get()
             if data is None:

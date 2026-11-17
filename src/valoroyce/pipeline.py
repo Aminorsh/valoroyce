@@ -127,6 +127,9 @@ class Pipeline:
     def join(self, timeout: float | None = None) -> None:
         for t in self._threads:
             t.join(timeout)
+        join_source = getattr(self.source, "join", None)
+        if join_source:
+            join_source(timeout)
 
     def _guard(self, fn: Callable[[], None]) -> None:
         try:

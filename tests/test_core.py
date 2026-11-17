@@ -230,6 +230,7 @@ def test_gpu_switch_controls_llama_layers(tmp_path, monkeypatch):
 
     monkeypatch.setattr(tr.subprocess, "Popen", FakePopen)
     monkeypatch.setattr(tr.LlamaTranslator, "_wait_ready", lambda self: None)
+    monkeypatch.setattr(tr, "_port_free", lambda host, port: None)  # whatever runs on this PC
     monkeypatch.chdir(tmp_path)
     g = Glossary.load()
     from pathlib import Path

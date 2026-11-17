@@ -27,7 +27,11 @@ whisper = [
 dev = ["pytest>=8"]
 
 [project.scripts]
-valoroyce = "valoroyce.cli:main"
+valoroyce = "valoroyce.cli:entry"
+
+# The same program without a console window, for shortcuts.
+[project.gui-scripts]
+valoroyce-gui = "valoroyce.cli:gui"
 
 [tool.uv]
 # The NVIDIA libraries ship no source: only versions that have a Windows build

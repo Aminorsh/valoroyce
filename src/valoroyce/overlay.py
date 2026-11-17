@@ -619,6 +619,7 @@ class Controller(QObject):
             self.hotkey.release()
         if self.pipeline:
             self.pipeline.stop()
+            self.pipeline.join(3.0)  # the process ends right after this
         if self.recording:
             self.recording.close()
         if self.translator:
@@ -629,7 +630,20 @@ def run_overlay(cfg: Config, glossary: Glossary, echo=None, record: bool = False
     app = QApplication.instance() or QApplication(sys.argv[:1])
     app.setQuitOnLastWindowClosed(False)
     app.setWindowIcon(app_icon())
+    instance = None
+    if cfg.audio.source != "file":  # a file run is a test and may run beside the real thing
+        from .desktop import SingleInstance
+
+        if SingleInstance.ask_running("settings"):
+            print("Valoroyce is already running: its settings window was opened instead",
+                  file=sys.stderr)
+            return 0
+        # "settings" from a second start; "quit" from an installer that is about to update us.
+        instance = SingleInstance(
+            lambda msg: app.quit() if msg == "quit" else controller.open_settings())
     controller = Controller(app, cfg, glossary, echo)
+    if instance is not None:
+        instance.listen()
 
     # Let Ctrl+C in the console reach Python while Qt owns the main loop.
     signal.signal(signal.SIGINT, lambda *_: app.quit())
