@@ -441,7 +441,7 @@ class Controller(QObject):
         if lacking:
             self.status.setText("缺少模型（在「设置与模型」里下载）")
             self.window.notice("还缺少模型：" + "、".join(i.title for i in lacking)
-                               + " · 请在设置窗口里下载", 3600.0)
+                               + " · 请在设置窗口里下载", 20.0)  # the tray menu keeps saying it
             return
         self.pending.clear()
         self.start()
@@ -655,8 +655,16 @@ def run_overlay(cfg: Config, glossary: Glossary, echo=None, record: bool = False
     controller.window.show()
     if record:
         controller.record.setChecked(True)
+    from . import catalog
+
+    chosen = catalog.take_choice()  # the models ticked in the installer, on its first start
     controller.resume()
-    if controller.pipeline is None and not controller.busy:
+    if chosen is not None:
+        controller.open_settings("models")
+        for item in chosen:
+            if not item.installed(cfg.models_path):
+                controller.settings.models.start(item)
+    elif controller.pipeline is None and not controller.busy:
         controller.open_settings("models")  # first start: something has to be downloaded
     try:
         app.exec()

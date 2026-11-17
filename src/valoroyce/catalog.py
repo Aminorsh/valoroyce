@@ -165,8 +165,9 @@ def _run(cmd: list[str], say, cancel, cwd=None, env=None) -> None:
         raise RuntimeError("\n".join(tail) or f"{Path(cmd[0]).name} failed ({proc.returncode})")
 
 
-def _sample_wheel(root: Path | None) -> str:
-    """Path of a large locked wheel on the package servers, to time them with."""
+def _sample_wheel(root: Path | None, package: str = "nvidia-cudnn-cu12") -> str:
+    """Path of a large locked wheel of `package` on the package servers, to
+    time them with."""
     if root is None:
         return ""
     tag = {"win32": "win_amd64", "linux": "manylinux"}.get(sys.platform, "none")
@@ -175,8 +176,9 @@ def _sample_wheel(root: Path | None) -> str:
             packages = tomllib.load(f).get("package", [])
     except (OSError, ValueError):
         return ""
+    wanted = package
     for package in packages:
-        if package.get("name") == "nvidia-cudnn-cu12":
+        if package.get("name") == wanted:
             for wheel in package.get("wheels", []):
                 url = wheel.get("url", "")
                 if tag in url and "aarch64" not in url and url.startswith(_PYPI[1]):
@@ -184,31 +186,53 @@ def _sample_wheel(root: Path | None) -> str:
     return ""
 
 
-def _index_routes(mirror: str, root: Path | None, say) -> list[tuple[str, dict[str, str]]]:
+def _index_routes(mirror: str, root: Path | None, say,
+                  sample_package: str = "nvidia-cudnn-cu12") -> list[tuple[str, dict[str, str]]]:
     """(package index, environment for the installer) routes, fastest first."""
+    return [(index, env) for index, _files, _label, env, _opener
+            in package_routes(mirror, _sample_wheel(root, sample_package), say)]
+
+
+def package_routes(mirror: str, sample: str, say) -> list[tuple]:
+    """(package index, file server, label, environment for the installer,
+    opener) for each server and way to reach it, fastest first when `sample`
+    (a file's path on the servers) can time them."""
     proxies = urllib.request.getproxies()
     through = dict(os.environ)
     for scheme in ("http", "https"):  # a proxy set in Windows only: tell the installer too
         if proxies.get(scheme):
             through.setdefault(f"{scheme.upper()}_PROXY", proxies[scheme])
-    direct = {k: v for k, v in os.environ.items() if not k.lower().endswith("_proxy")}
-    ways = [("", through, urllib.request.build_opener())]
-    if proxies:
-        ways.append((" (direct)", direct, urllib.request.build_opener(urllib.request.ProxyHandler({}))))
     servers = {"global": [_PYPI], "cn": [_TUNA]}.get(mirror, [_PYPI, _TUNA])
-    routes = [(index, files, label, env, opener)
-              for index, files in servers for label, env, opener in ways]
-    sample = _sample_wheel(root)
+    routes = []
+    for index, files in servers:
+        routes.append((index, files, "", through, urllib.request.build_opener()))
+        if proxies:
+            # Only this server bypasses the proxy: uv reaches other hosts too, and
+            # without the proxy those can crawl (a dry run took 13 s instead of 2).
+            hosts = ",".join(dict.fromkeys(u.split("/")[2] for u in (index, files)))
+            no_proxy = ",".join(x for x in (os.environ.get("NO_PROXY") or os.environ.get("no_proxy"),
+                                            hosts) if x)
+            routes.append((index, files, " (direct)", {**through, "NO_PROXY": no_proxy,
+                                                       "no_proxy": no_proxy},
+                           urllib.request.build_opener(urllib.request.ProxyHandler({}))))
     if len(routes) > 1 and sample:
         say("testing download speed...")
-        timed = []
-        for route in routes:
-            speed = setup._probe(route[4], route[1] + sample, thorough=True)
+        # All at once: one after another took half a minute, most of it on dead routes.
+        speeds = [0.0] * len(routes)
+
+        def probe(i):
+            speeds[i] = setup._probe(routes[i][4], routes[i][1] + sample, thorough=True)
+
+        probes = [threading.Thread(target=probe, args=(i,), daemon=True) for i in range(len(routes))]
+        for thread in probes:
+            thread.start()
+        for thread in probes:
+            thread.join(setup.THOROUGH_SECONDS + 15)
+        for route, speed in zip(routes, speeds):
             say(f"  {route[0].split('/')[2]}{route[2]}: {speed / 1e6:.2f} MB/s")
-            timed.append((speed, route))
-        fastest = sorted(timed, key=lambda t: -t[0])
-        routes = [r for speed, r in fastest if speed > 0] or routes
-    return [(index, env) for index, _files, _label, env, _opener in routes]
+        fastest = sorted(zip(speeds, range(len(routes))), key=lambda t: -t[0])
+        routes = [routes[i] for speed, i in fastest if speed > 0] or routes
+    return routes
 
 
 def install_libraries(mirror: str = "auto", say=print, cancel=None) -> None:
@@ -418,6 +442,26 @@ def advice() -> str:
     if gpu.memory_mb < COMFORTABLE_MB:
         line += "显存不到 6 GB，和游戏一起用可能吃紧：游戏卡顿时把「翻译」改到 CPU。"
     return line
+
+
+# Written by the installer: the models the player ticked, one id per line
+# (empty: none, for example because captions will use an online service).
+CHOICE_FILE = Path("models-to-download.txt")
+
+
+def take_choice(path: Path = CHOICE_FILE) -> list[Item] | None:
+    """The installer's choice of models, once: the file is removed. None when
+    there is no choice to act on."""
+    try:
+        text = path.read_text(encoding="utf-8-sig")
+    except OSError:
+        return None
+    try:
+        path.unlink()
+    except OSError:
+        pass
+    ids = [line.strip() for line in text.splitlines() if line.strip()]
+    return [ITEMS[i] for i in dict.fromkeys(ids) if i in ITEMS]
 
 
 def usable(item: Item, models: Path) -> bool:
