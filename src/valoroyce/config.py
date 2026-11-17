@@ -69,6 +69,33 @@ class AsrConfig:
 
 
 @dataclass
+class CustomModelConfig:
+    """A caption model of the player's own choice, tried before the model of
+    [translate]. A sentence it fails on, declines, or does not answer in
+    `timeout` seconds is translated by that model instead."""
+
+    #   ""        none: captions use the model of [translate] alone
+    #   "openai"  a server that speaks OpenAI's API at base_url: Ollama, LM Studio,
+    #             or an online service. An online service receives every sentence
+    #             that is heard, and some services alter sentences on some topics.
+    #   "llama"   a .gguf file of your own (`model_file` inside models_dir), started
+    #             by us and served at base_url (a port of its own on 127.0.0.1)
+    backend: str = ""
+    base_url: str = "http://127.0.0.1:11434"
+    # The key may also come from the environment variable VALOROYCE_CAPTION_API_KEY.
+    api_key: str = ""
+    model: str = ""
+    # "generic": plain instructions for any chat model. "hy-mt": Hy-MT's format.
+    prompt: str = "generic"
+    timeout: float = 2.5
+    # Also translate half-finished captions with this model. Off: those stay on
+    # the model of [translate], and only finished sentences are sent here.
+    partials: bool = False
+    extra_body: dict = field(default_factory=dict)
+    model_file: str = ""
+
+
+@dataclass
 class TranslateConfig:
     # "llama": start a local llama-server ourselves. "openai": use a server that
     # is already running at base_url. "none": glossary substitution only.
@@ -97,6 +124,7 @@ class TranslateConfig:
     gpu_layers: int = 99
     threads: int = 4
     server_args: list[str] = field(default_factory=list)
+    custom: CustomModelConfig = field(default_factory=CustomModelConfig)
 
 
 @dataclass

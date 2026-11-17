@@ -10,6 +10,7 @@ from __future__ import annotations
 import dataclasses
 import json
 import os
+import socket
 import subprocess
 import sys
 import time
@@ -34,6 +35,11 @@ class Declined(RuntimeError):
     """The model answered, but not with a translation."""
 
 
+class Unreachable(RuntimeError):
+    """Nothing answers at that address: no server running there, or no such host.
+    Unlike a timeout, trying again at once will not help."""
+
+
 def _opener(base_url: str) -> urllib.request.OpenerDirector:
     # A system proxy must never sit between us and a server on this machine.
     if urlparse(base_url).hostname in _LOOPBACK:
@@ -47,7 +53,7 @@ class GlossaryTranslator:
     def __init__(self, glossary: Glossary):
         self.glossary = glossary
 
-    def translate(self, text: str, lang: str, hits: list[Hit]) -> str:
+    def translate(self, text: str, lang: str, hits: list[Hit], final: bool = True) -> str:
         return self.glossary.substitute(text)
 
     def compose(self, text: str, lang: str) -> str:
@@ -95,6 +101,8 @@ def build_messages(
                 f"把玩家说的话翻译成简短、口语化的{target}，使用国服玩家的说法。"
                 "只输出译文，不要解释，不要加引号。"
             )
+            if may_decline:
+                system += f"\n如果这句话你不能或不愿翻译，只输出三个字符：{DECLINED}"
         if pairs:
             system += "\n术语表：\n" + "\n".join(f"{src} = {zh}" for src, zh in pairs)
         return [{"role": "system", "content": system}, {"role": "user", "content": text}]
@@ -121,10 +129,13 @@ class ChatTranslator:
         # Set when another translator can take over a sentence this one declines.
         self.may_decline = False
 
-    def translate(self, text: str, lang: str, hits: list[Hit]) -> str:
-        """A line that was heard -> Chinese caption."""
+    def translate(self, text: str, lang: str, hits: list[Hit], final: bool = True) -> str:
+        """A line that was heard -> Chinese caption. `final` is False for a
+        sentence that is still being spoken."""
         pairs = [(h.source, h.zh) for h in hits]
-        out = self._chat(build_messages(text, pairs, self.cfg))
+        out = self._chat(build_messages(text, pairs, self.cfg, may_decline=self.may_decline))
+        if self.may_decline and (not out or out.startswith(DECLINED)):
+            raise Declined("the model did not translate this sentence")
         return self.glossary.enforce(out, hits)
 
     def compose(self, text: str, lang: str) -> str:
@@ -154,11 +165,23 @@ class ChatTranslator:
         headers = {"Content-Type": "application/json"}
         if self.cfg.api_key:
             headers["Authorization"] = f"Bearer {self.cfg.api_key}"
-        req = urllib.request.Request(self.url, json.dumps(body).encode(), headers)
+        data = json.dumps(body).encode()
         host = urlparse(self.url).hostname
         try:
-            with self._open(req, timeout=self.cfg.timeout) as resp:
-                reply = json.load(resp)
+            try:
+                with self._open(urllib.request.Request(self.url, data, headers),
+                                timeout=self.cfg.timeout) as resp:
+                    reply = json.load(resp)
+            except urllib.error.HTTPError as e:
+                # "http://" for a service that wants "https://": urllib does not
+                # repeat a POST at the new address by itself. Follow it, and keep it.
+                moved = e.headers.get("Location", "") if e.code in (307, 308) else ""
+                if not moved.startswith(("http://", "https://")):
+                    raise
+                self.url = moved
+                with self._open(urllib.request.Request(self.url, data, headers),
+                                timeout=self.cfg.timeout) as resp:
+                    reply = json.load(resp)
         except urllib.error.HTTPError as e:
             if e.code in (401, 403):
                 raise RuntimeError(f"{host} rejected the API key (HTTP {e.code}). "
@@ -170,8 +193,10 @@ class ChatTranslator:
             raise RuntimeError(f"{host} answered HTTP {e.code}: {detail}") from None
         except (urllib.error.URLError, TimeoutError) as e:
             reason = getattr(e, "reason", e)
-            raise RuntimeError(f"cannot reach {host} ({reason}). Is the network up, "
-                               "and is base_url right?") from None
+            kind = (Unreachable if isinstance(reason, (ConnectionRefusedError, socket.gaierror))
+                    else RuntimeError)
+            raise kind(f"cannot reach {host} ({reason}). Is the network up, "
+                       "and is base_url right?") from None
         return clean_output(reply["choices"][0]["message"]["content"] or "")
 
     def close(self) -> None:
@@ -321,6 +346,78 @@ class ComposeWithFallback:
         self.own.close()
 
 
+class CaptionWithFallback:
+    """Captions on the player's own model, with the usual caption translator
+    behind it. A sentence the own model fails on, declines, or does not answer
+    within its timeout is done by the fallback. After FAILURES_TO_REST failures
+    in a row the own model rests for REST seconds, so a lost network or a
+    stopped server does not hold up every caption by a timeout."""
+
+    FAILURES_TO_REST = 2
+    REST = 30.0
+
+    def __init__(self, own, fallback, partials: bool = False, notify=None,
+                 clock=time.monotonic):
+        self.own, self.fallback = own, fallback
+        self.partials = partials  # half-finished captions go to the own model too
+        # Told when the own model starts resting; once, until it works again.
+        self.notify = notify or (lambda why: None)
+        self._told = False
+        self.clock = clock
+        self._failures = 0
+        self._rest_until = 0.0
+        # Why the last caption was done by the fallback; "" if it was not.
+        self.fell_back = ""
+
+    def path(self, final: bool) -> str:
+        """Which model a caption goes to: the pipeline reuses a translation only
+        within one path, so a finished sentence is not left with the fallback's
+        version of its last partial."""
+        return "own" if final or self.partials else "fallback"
+
+    def translate(self, text: str, lang: str, hits: list[Hit], final: bool = True) -> str:
+        self.fell_back = ""
+        if self.path(final) == "fallback":
+            return self.fallback.translate(text, lang, hits, final=final)
+        if self.clock() < self._rest_until:
+            self.fell_back = "resting after failures"
+            return self.fallback.translate(text, lang, hits, final=final)
+        try:
+            out = self.own.translate(text, lang, hits, final=final)
+            self._failures, self._told = 0, False
+            if out:
+                return out
+            self.fell_back = "empty reply"
+        except Declined as e:
+            self._failures, self._told = 0, False  # it works; it only would not do this one
+            self.fell_back = str(e)
+        except Exception as e:
+            self.fell_back = str(e)
+            # A timeout may be a passing thing; a refused connection is not
+            # (and on Windows it takes 2 s to be refused).
+            self._failures += self.FAILURES_TO_REST if isinstance(e, Unreachable) else 1
+            if self._failures >= self.FAILURES_TO_REST:
+                self._failures = 0
+                self._rest_until = self.clock() + self.REST
+                print(f"note: own caption model rests for {self.REST:.0f} s ({e})",
+                      file=sys.stderr, flush=True)
+                if not self._told:
+                    self._told = True
+                    self.notify(str(e))
+        return self.fallback.translate(text, lang, hits, final=final)
+
+    def compose(self, text: str, lang: str) -> str:
+        # Messages are not the caption model's business here: they stay on the
+        # local model (or the [compose] model, which wraps this one).
+        return self.fallback.compose(text, lang)
+
+    def close(self) -> None:
+        try:
+            self.own.close()
+        finally:
+            self.fallback.close()
+
+
 def make_compose_translator(cfg, glossary: Glossary, models: Path, fallback=None):
     """A translator of its own for outgoing messages, or None when the config
     does not ask for one (then the caption translator is used). `fallback`
@@ -365,3 +462,53 @@ def make_translator(cfg: TranslateConfig, glossary: Glossary, models: Path):
         print("starting local translation model...", file=sys.stderr, flush=True)
         return LlamaTranslator(cfg, glossary, models)
     raise ValueError(f"unknown translate.backend: {cfg.backend!r}")
+
+
+def is_online(base_url: str) -> bool:
+    """Whether a server address leaves this computer."""
+    return urlparse(base_url).hostname not in _LOOPBACK
+
+
+def _custom_backend(cfg: TranslateConfig, glossary: Glossary, models: Path):
+    c = cfg.custom
+    own = dataclasses.replace(
+        cfg, backend=c.backend, base_url=c.base_url,
+        api_key=c.api_key or os.environ.get("VALOROYCE_CAPTION_API_KEY", ""),
+        model=c.model or cfg.model, prompt=c.prompt, timeout=c.timeout,
+        extra_body=c.extra_body, model_file=c.model_file,
+    )
+    if c.backend == "openai":
+        return ChatTranslator(own, glossary)
+    if c.backend == "llama":
+        if not c.model_file:
+            raise ValueError('[translate.custom] backend = "llama" needs model_file: the name '
+                             "of a .gguf file in the models folder")
+        if is_online(c.base_url):
+            raise ValueError("[translate.custom] base_url must be on this computer "
+                             '(127.0.0.1) for backend = "llama"')
+        if cfg.backend == "llama" and urlparse(c.base_url).port == urlparse(cfg.base_url).port:
+            raise ValueError("[translate.custom] base_url must use a different port than "
+                             "[translate] base_url")
+        print("starting your own caption model...", file=sys.stderr, flush=True)
+        return LlamaTranslator(own, glossary, models)
+    raise ValueError(f"unknown translate.custom.backend: {c.backend!r}")
+
+
+def make_caption_translator(cfg: TranslateConfig, glossary: Glossary, models: Path,
+                            notify=None):
+    """The caption translator: the model of [translate], with the player's own
+    model in front of it when [translate.custom] names one. An own model that
+    cannot start is reported through `notify(why)` and left out: captions go
+    on with the model behind it."""
+    main = make_translator(cfg, glossary, models)
+    if not cfg.custom.backend:
+        return main
+    try:
+        own = _custom_backend(cfg, glossary, models)
+    except Exception as e:
+        print(f"warning: own caption model not available ({e})", file=sys.stderr, flush=True)
+        if notify:
+            notify(str(e))
+        return main
+    own.may_decline = True  # something stands behind it
+    return CaptionWithFallback(own, main, cfg.custom.partials, notify)

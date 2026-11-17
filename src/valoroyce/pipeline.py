@@ -173,17 +173,22 @@ class Pipeline:
     # -- translator ------------------------------------------------------------
 
     def _translate(self) -> None:
-        last_source, last_text = "", ""
+        last_key, last_text = None, ""
+        # A translator that sends finished and unfinished speech to different
+        # models says which one a caption goes to; reuse stays within one.
+        path = getattr(self.translator, "path", lambda final: "")
         while True:
             job = self._box.get()
             if job is None:
                 break
-            if job.source == last_source:
+            key = (job.source, path(job.final))
+            if key == last_key:
                 # The last partial often already is the whole sentence.
                 text = last_text
             else:
                 try:
-                    text = self.translator.translate(job.source, job.lang, job.hits)
+                    text = self.translator.translate(job.source, job.lang, job.hits,
+                                                     final=job.final)
                 except Exception as e:
                     # Never go silent: fall back to names-only substitution.
                     print(f"translation failed ({e}); showing glossary-only text", file=sys.stderr)
@@ -191,7 +196,7 @@ class Pipeline:
                 if not text:
                     # The model answered with nothing: show what was heard instead.
                     text = self.glossary.substitute(job.source)
-                last_source, last_text = job.source, text
+                last_key, last_text = key, text
             if not job.final and job.utt <= self._final_utt:
                 continue  # the finished version of this utterance is already on its way
             if text:

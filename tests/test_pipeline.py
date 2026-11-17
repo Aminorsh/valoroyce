@@ -156,7 +156,7 @@ def test_slow_recognition_does_not_fall_behind_the_audio():
 
 def test_empty_translation_falls_back_to_what_was_heard():
     class Silent:
-        def translate(self, text, lang, hits):
+        def translate(self, text, lang, hits, final=True):
             return ""
 
     cfg = config()

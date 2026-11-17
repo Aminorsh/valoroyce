@@ -81,10 +81,10 @@ A caption strip appears near the bottom of the screen, and a red speech-bubble i
 
 | Page | What it does |
 |---|---|
-| 模型 (models) | One card per model: what it is for, the hardware it suits, its size and its state. **下载 / 取消 / 继续下载** (download, cancel, continue), **删除** (delete: frees the disk space, can be downloaded again any time), and untick **启用** (enabled) to keep the files but not use the model. Recognition models have ▲ ▼ to set the **order of use**: they are tried from the top and the first that can run is used. The download source is chosen at the top (fastest by test / mirrors in China / international) |
+| 模型 (models) | One card per model (and one for your own caption translation model): what it is for, the hardware it suits, its size and its state. **下载 / 取消 / 继续下载** (download, cancel, continue), **删除** (delete: frees the disk space, can be downloaded again any time), and untick **启用** (enabled) to keep the files but not use the model. Recognition models have ▲ ▼ to set the **order of use**: they are tried from the top and the first that can run is used. The download source is chosen at the top (fastest by test / mirrors in China / international) |
 | 字幕 (captions) | Font size, rows on screen, how long a caption stays, background opacity, width, original text on or off, dragging the strip |
 | 声音与识别 (sound and recognition) | Playback device to listen to (see "Caption only your teammates"), languages, captions while someone is still talking, the pause that ends a sentence |
-| 翻译 (translation) | Translation model on the GPU or the CPU, whether half-sentences are translated |
+| 翻译 (translation) | Translation model on the GPU or the CPU, whether half-sentences are translated; your own translation model (see "Captions on a translation model of your choice") |
 | 发消息 (messages) | Target language, shortcut, an online service instead of the local model (address, model name, API key) |
 
 What is changed in the settings window or the tray menu is stored in `valoroyce.state.json` and overrides `config.toml`. Delete that file (or click "恢复默认设置" on the 关于 page) to return to the configured defaults.
@@ -100,7 +100,7 @@ To type to your team: choose "发消息（中文 → 日语 / 英语）…" in t
 
 #### Better messages: a separate model for the message box (optional)
 
-By default, messages use the same small local model as the captions: fully offline, but stiff with casual speech and slang. You can give the message box a stronger model of its own. **Captions are not affected and are always translated locally.** Add one block to `config.toml`:
+By default, messages use the same small local model as the captions: fully offline, but stiff with casual speech and slang. You can give the message box a stronger model of its own. **Captions are not affected** (for captions, see the next section). Add one block to `config.toml`:
 
 **An online service** (anything that speaks OpenAI's API; you need your own API key). The easy way: on the 发消息 page of the settings window choose "在线服务" and fill in the address, model name and key (a button fills in DeepSeek's values). Or in `config.toml`, DeepSeek shown here:
 
@@ -128,6 +128,19 @@ model_file = "Qwen3.5-4B-Q4_K_M.gguf"
 ```
 
 It is loaded the first time the message box opens. Its tone is more natural than the default model's, but it is less accurate than a large online model and needs extra RAM or VRAM.
+
+### Captions on a translation model of your choice (optional)
+
+The default caption model, Hy-MT2, is small, fast and fully offline, but casual speech, slang and half sentences often come out stiff, and sometimes it copies the original. You can have captions **go to a model of your own choice first**, with Hy-MT2 behind it:
+
+- On the 模型 page of the settings window tick **启用** (enabled) on "自定义翻译模型" (own translation model), then choose its kind and fill in the address and model name on the 翻译 page. Buttons fill in Ollama, LM Studio and DeepSeek.
+- **A model server on your PC** (Ollama, LM Studio, ...: choose "兼容 OpenAI 接口的服务") or **a .gguf file of your own** (put it in the `models` folder and choose "自己的 .gguf 模型文件"; the program starts it): still fully offline, but it takes VRAM next to Hy-MT2.
+- **An online service** (DeepSeek, for example, with your own API key): clearly more natural. Two things to know, which the settings window also says:
+  - **Every sentence** your teammates say (the recognised text) is sent to that service; it is no longer handled only on your PC. This is off by default.
+  - Some online services **silently alter sentences** on some topics, sometimes into the opposite meaning, and nothing on screen shows it.
+- A sentence it fails on, declines, or has not finished within the timeout (2.5 s by default) is **translated by Hy-MT2 instead**. After failures in a row it is left alone for 30 seconds, and the screen says so once. With Hy-MT2 switched off, those sentences get glossary substitution only.
+- Half sentences while someone is still talking stay on Hy-MT2 by default (fast, and free); only finished sentences are sent. So a finished caption arrives about a second later than with Hy-MT2 alone. Measured on a recorded match with DeepSeek: about 1 s per sentence; finished captions appeared a median 2.1 s after the speaker stopped (about 1 s with Hy-MT2 alone).
+- To configure it by hand see `[translate.custom]` in `config.example.toml`; the key can also come from the environment variable `VALOROYCE_CAPTION_API_KEY`.
 
 ### GPU or CPU?
 
@@ -157,7 +170,8 @@ The common options are all in the settings window; no file needs editing. To wri
 | No GPU and a busy CPU | `[translate] partials = false` (translate finished sentences only) |
 | Default language and shortcut for messages | `[compose] target = "en"`, `hotkey = "ctrl+shift+f8"` (empty = no shortcut) |
 | A stronger model for messages (online or local) | `[compose] backend = "openai"` or `"llama"`, see "Better messages" above |
-| Use your own model server (Ollama, LM Studio, ...) | `[translate] backend = "openai"`, plus `base_url`, `model`, `prompt = "generic"` |
+| Captions on your own model first, Hy-MT2 behind it | `[translate.custom] backend = "openai"` (or `"llama"`), see "Captions on a translation model of your choice" |
+| Captions on your own model server only (Ollama, LM Studio, ...), no Hy-MT2 | `[translate] backend = "openai"`, plus `base_url`, `model`, `prompt = "generic"` |
 | No translation model, glossary substitution only | `[translate] backend = "none"` |
 
 ### Adding your own terms

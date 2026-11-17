@@ -468,3 +468,154 @@ def test_the_caption_strip_never_holds_more_rows_than_allowed():
 def test_wallet_is_chamber_in_typed_messages():
     text, pairs = Glossary.load().outgoing("钱包在A点", "ja")
     assert ("尚勃勒", "チェンバー") in pairs and "钱包" not in text
+
+
+def test_an_own_caption_model_goes_first_and_the_local_one_takes_over(tmp_path, monkeypatch):
+    from valoroyce.translate import (DECLINED, CaptionWithFallback, ChatTranslator,
+                                     GlossaryTranslator, build_messages, make_caption_translator)
+
+    g = Glossary.load()
+    cfg = Config()
+    cfg.translate.backend = "none"  # behind it: names only, so nothing is started here
+    assert type(make_caption_translator(cfg.translate, g, tmp_path)) is GlossaryTranslator
+
+    cfg.translate.custom.backend = "openai"
+    cfg.translate.custom.base_url = "https://api.example.com"
+    cfg.translate.custom.model = "some-chat-model"
+    monkeypatch.setenv("VALOROYCE_CAPTION_API_KEY", "from-env")
+    t = make_caption_translator(cfg.translate, g, tmp_path)
+    assert isinstance(t, CaptionWithFallback) and type(t.own) is ChatTranslator
+    assert t.own.url == "https://api.example.com/v1/chat/completions"
+    assert (t.own.cfg.api_key, t.own.cfg.model, t.own.cfg.timeout) == ("from-env", "some-chat-model", 2.5)
+    assert t.own.may_decline  # told how to decline, since something stands behind it
+    assert DECLINED in build_messages("x", [], t.own.cfg, may_decline=True)[0]["content"]
+
+    heard = "アイソがBロング"
+    local = g.substitute(heard)
+    now = [0.0]
+    t.clock = lambda: now[0]
+    told = []
+    t.notify = told.append
+    replies = iter(["壹决在B长廊", DECLINED, ""])
+    t.own._chat = lambda messages: next(replies)
+    assert t.translate(heard, "ja", g.find(heard)) == "壹决在B长廊" and not t.fell_back
+    for _ in range(2):  # declined, then nothing: the local translator answers
+        assert t.translate(heard, "ja", g.find(heard)) == local and t.fell_back
+
+    calls = []
+
+    def unreachable(messages):
+        calls.append(1)
+        raise RuntimeError("cannot reach api.example.com")
+    t.own._chat = unreachable
+    assert t.translate(heard, "ja", []) == local and "cannot reach" in t.fell_back
+    assert not told  # one failure: tried again next time
+    t.translate(heard, "ja", [])
+    assert len(calls) == 2 and told == ["cannot reach api.example.com"]
+    t.translate(heard, "ja", [])  # resting: not even asked
+    assert len(calls) == 2 and "resting" in t.fell_back
+    now[0] = t.REST + 1
+    t.translate(heard, "ja", [])
+    t.translate(heard, "ja", [])
+    assert len(calls) == 4 and len(told) == 1  # still down: rests again, but says it once
+
+    # Nothing listening there: no second try before resting.
+    from valoroyce.translate import Unreachable
+
+    now[0] = 500.0
+    t.own._chat = lambda messages: (_ for _ in ()).throw(Unreachable("cannot reach 127.0.0.1"))
+    t.translate(heard, "ja", [])
+    assert "cannot reach" in t.fell_back
+    t.translate(heard, "ja", [])
+    assert "resting" in t.fell_back
+
+    # Half-finished speech stays on the local model unless asked otherwise.
+    now[0] = 1000.0
+    t.own._chat = lambda messages: "壹决在B长廊"
+    assert t.translate(heard, "ja", [], final=False) == local
+    assert t.path(False) == "fallback" and t.path(True) == "own"
+    t.partials = True
+    assert t.translate(heard, "ja", [], final=False) == "壹决在B长廊" and t.path(False) == "own"
+    # Messages never go to the caption model of one's own.
+    assert t.compose("你好", "ja") == GlossaryTranslator(g).compose("你好", "ja")
+
+
+def test_an_own_caption_model_that_cannot_start_is_left_out(tmp_path, monkeypatch):
+    from valoroyce.translate import GlossaryTranslator, make_caption_translator
+
+    g = Glossary.load()
+    cfg = Config()
+    cfg.translate.backend = "none"
+    custom = cfg.translate.custom
+    told = []
+    for backend, file, url, why in [
+        ("llama", "", "http://127.0.0.1:8179", "model_file"),
+        ("llama", "mine.gguf", "https://api.example.com", "this computer"),
+        ("cloud", "", "http://127.0.0.1:8179", "translate.custom.backend"),
+    ]:
+        custom.backend, custom.model_file, custom.base_url = backend, file, url
+        t = make_caption_translator(cfg.translate, g, tmp_path, told.append)
+        assert type(t) is GlossaryTranslator and why in told[-1]
+    cfg.translate.backend = "llama"  # its own port, not the one Hy-MT2 is served on
+    custom.backend, custom.model_file, custom.base_url = "llama", "mine.gguf", cfg.translate.base_url
+    from valoroyce import translate
+
+    monkeypatch.setattr(translate, "make_translator", lambda *a: GlossaryTranslator(g))
+    t = make_caption_translator(cfg.translate, g, tmp_path, told.append)
+    assert type(t) is GlossaryTranslator and "different port" in told[-1]
+
+
+def test_online_or_not():
+    from valoroyce.translate import is_online
+
+    assert not is_online("http://127.0.0.1:11434") and not is_online("http://localhost:1234")
+    assert is_online("https://api.deepseek.com")
+
+
+def test_a_service_that_moved_to_https_is_followed(monkeypatch):
+    import http.server
+    import json as _json
+    import threading as _threading
+
+    from valoroyce.translate import ChatTranslator
+
+    seen = []
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_POST(self):
+            body = self.rfile.read(int(self.headers["Content-Length"]))
+            seen.append((self.path, _json.loads(body)["messages"][-1]["content"]))
+            if self.path.startswith("/v1"):  # the old address: moved, as CloudFront says it
+                self.send_response(307)
+                self.send_header("Location", f"http://127.0.0.1:{port}/new/chat")
+                self.end_headers()
+                return
+            reply = _json.dumps({"choices": [{"message": {"content": "他们转A了"}}]}).encode()
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(reply)))
+            self.end_headers()
+            self.wfile.write(reply)
+
+        def log_message(self, *a):
+            pass
+
+    server = http.server.HTTPServer(("127.0.0.1", 0), Handler)
+    port = server.server_address[1]
+    _threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        cfg = Config().translate
+        cfg.base_url, cfg.prompt = f"http://127.0.0.1:{port}", "generic"
+        t = ChatTranslator(cfg, Glossary.load())
+        assert t.translate("they're rotating to A", "en", []) == "他们转A了"
+        assert t.translate("they're rotating to A", "en", []) == "他们转A了"
+        # Asked again at the new address with the same request, and kept there.
+        assert [p for p, _ in seen] == ["/v1/chat/completions", "/new/chat", "/new/chat"]
+        assert seen[0][1] == seen[1][1] == "they're rotating to A"
+    finally:
+        server.shutdown()
+        server.server_close()
+    from valoroyce.translate import Unreachable
+
+    cfg.timeout = 5.0
+    with pytest.raises(Unreachable):  # the server is gone: refused, not timed out
+        ChatTranslator(cfg, Glossary.load()).translate("hi", "en", [])

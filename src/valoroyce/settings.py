@@ -13,6 +13,7 @@ import tempfile
 import threading
 from importlib import metadata
 from pathlib import Path
+from urllib.parse import urlparse
 
 from PySide6.QtCore import QPointF, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QPainter, QPen, QPixmap
@@ -24,6 +25,7 @@ from PySide6.QtWidgets import (
 
 from . import catalog, hotkey, state
 from .setup import Cancelled
+from .translate import CAPTION_MODEL, CaptionWithFallback, is_online
 
 OK, WARN, OFF = "#5BD6A0", "#F5B85A", "#7E8A96"
 PAGES = [("models", "模型"), ("captions", "字幕"), ("sound", "声音与识别"),
@@ -34,6 +36,16 @@ LANGUAGES = [(["ja", "en"], "日语为主，也识别英语"), (["ja"], "只有�
              (["en", "ja"], "英语为主，也识别日语"), (["en"], "只有英语")]
 NO_THINKING = {"type": "disabled"}
 DEEPSEEK = {"compose.base_url": "https://api.deepseek.com", "compose.model": "deepseek-flash"}
+# Ready-made addresses for the own caption model: (button, address, model name or None).
+CUSTOM_PRESETS = [("Ollama", "http://127.0.0.1:11434", None),
+                  ("LM Studio", "http://127.0.0.1:1234", None),
+                  ("DeepSeek（在线）", "https://api.deepseek.com", "deepseek-flash")]
+CUSTOM_KINDS = [("", "不使用（只用 Hy-MT2）"),
+                ("openai", "兼容 OpenAI 接口的服务（Ollama、LM Studio、在线服务）"),
+                ("llama", "自己的 .gguf 模型文件")]
+CUSTOM_PORT = "http://127.0.0.1:8179"  # an own .gguf is served here, beside Hy-MT2 on 8177
+ONLINE_RISK = ("这是在线服务：队友说的每一句话（识别出的文字）都会发给它，不再只在本机处理。"
+               "有的在线服务会在某些话题上悄悄改写句子，意思可能和原话相反，字幕上看不出来。")
 
 STYLE = """
 QWidget#settings, QMessageBox { background: #0F1923; }
@@ -239,6 +251,75 @@ class ModelCard(QFrame):
         self.status.setStyleSheet(f"color: {colour};")
 
 
+def custom_problem(cfg) -> str:
+    """What keeps the own caption model from being used; "" if nothing does."""
+    c = cfg.translate.custom
+    if c.backend == "openai":
+        if not c.base_url:
+            return "还没填服务地址"
+        if not c.model:
+            return "还没填模型名称"
+        if is_online(c.base_url) and not c.api_key:
+            return "在线服务需要 API Key"
+    elif c.backend == "llama":
+        if not c.model_file:
+            return "还没选模型文件"
+        if not (cfg.models_path / c.model_file).exists():
+            return f"找不到 {c.model_file}"
+    return ""
+
+
+def custom_where(cfg) -> str:
+    c = cfg.translate.custom
+    if c.backend == "llama":
+        return f"模型文件 {c.model_file}"
+    host = urlparse(c.base_url).netloc or c.base_url
+    return f"在线服务 {host}" if is_online(c.base_url) else f"本机服务 {host}"
+
+
+class CustomCard(QFrame):
+    """The player's own caption model: not downloaded, only set up."""
+
+    def __init__(self, page: "ModelsPage"):
+        super().__init__()
+        self.page = page
+        self.setObjectName("card")
+        self.enable = QCheckBox("启用")
+        self.enable.clicked.connect(page.toggle_custom)
+        self.status = QLabel()
+        top = QHBoxLayout()
+        top.addWidget(label("自定义翻译模型", "title"))
+        top.addStretch(1)
+        top.addWidget(self.status)
+        low = QHBoxLayout()
+        low.addWidget(label("本机的 Ollama、LM Studio，自己的 .gguf 文件，或在线服务", "hint"), 1)
+        low.addWidget(self.enable)
+        low.addWidget(button("设置…", on_click=lambda: page.win.open("translate")))
+        box = QVBoxLayout(self)
+        box.setContentsMargins(16, 12, 16, 12)
+        box.setSpacing(6)
+        box.addLayout(top)
+        box.addWidget(label("用你自己选的模型翻译字幕。它出错、超时或拒绝翻译的句子，自动改用下面的 Hy-MT2。",
+                            wrap=True))
+        box.addLayout(low)
+
+    def refresh(self) -> None:
+        cfg = self.page.win.cfg
+        on = bool(cfg.translate.custom.backend)
+        self.enable.setChecked(on)
+        problem = custom_problem(cfg) if on else ""
+        if not on:
+            text, colour = "未启用", OFF
+        elif problem:
+            text, colour = f"已启用 · {problem}", WARN
+        else:
+            text, colour = f"已启用 · {custom_where(cfg)}", OK
+            if isinstance(getattr(self.page.win.host, "translator", None), CaptionWithFallback):
+                text += " · 正在使用"
+        self.status.setText(text)
+        self.status.setStyleSheet(f"color: {colour};")
+
+
 class ModelsPage(QWidget):
     progress = Signal(str, object, object, float)  # item, bytes so far, total, bytes per second
     said = Signal(str, str)                        # item, a line of status
@@ -250,6 +331,7 @@ class ModelsPage(QWidget):
         self.jobs: dict[str, threading.Event] = {}
         self._vad = threading.Lock()  # two downloads must not both fetch the voice detector
         self.cards = {item.id: ModelCard(self, item) for item in catalog.ITEMS.values()}
+        self.custom = CustomCard(self)
 
         self.mirror = QComboBox()
         for value, text in MIRRORS:
@@ -284,6 +366,9 @@ class ModelsPage(QWidget):
                             "hint", wrap=True))
         box.addLayout(self.asr)
         box.addWidget(label("字幕翻译", "h2"))
+        box.addWidget(label("从上到下：先用自定义模型（如果启用），它翻译不了的句子交给 Hy-MT2。",
+                            "hint", wrap=True))
+        box.addWidget(self.custom)
         box.addWidget(self.cards["hy-mt2"])
         box.addWidget(label("基础组件", "h2"))
         box.addWidget(self.cards["vad"])
@@ -334,6 +419,16 @@ class ModelsPage(QWidget):
                 return
             order.remove(item.id)
         self._set_order(order)
+
+    def toggle_custom(self, on: bool) -> None:
+        kind = state.load().get("custom_kind", "openai") if on else ""
+        self.win.set("translate.custom.backend", kind)
+        if kind == "llama" and is_online(self.win.cfg.translate.custom.base_url):
+            self.win.set("translate.custom.base_url", CUSTOM_PORT)
+        self.win._build_pages()  # the translation page shows the new choice
+        self.refresh()
+        if on:
+            self.win.open("translate")  # an address or a file still has to be filled in
 
     def move(self, item: catalog.Item, by: int) -> None:
         order = self.order()
@@ -427,6 +522,7 @@ class ModelsPage(QWidget):
         recommended = catalog.recommended()
         for card in self.cards.values():
             card.refresh(card.item in recommended)
+        self.custom.refresh()
         order = self.order()
         ranked = sorted(catalog.RECOGNIZERS,
                         key=lambda i: order.index(i.id) if i.id in order else len(order))
@@ -572,6 +668,8 @@ class SettingsWindow(QWidget):
         if self.value(name) != value and state.assign(self.cfg, name, value):
             state.put(name, value)
             self.host.setting_changed(name)
+            if name.startswith("translate.custom."):
+                self.models.custom.refresh()
             self._tick()
 
     def _spin(self, name: str, low, high, step=1, suffix: str = ""):
@@ -738,6 +836,114 @@ class SettingsWindow(QWidget):
         form.add("未说完的句子", self._check("translate.partials", "说话过程中的半句字幕也翻译"),
                  "CPU 吃紧时可以关掉，只翻译说完的整句。")
         form.add("CPU 线程数", self._spin("translate.threads", 1, 32), "只在翻译模型运行在 CPU 时有影响。")
+        page = QWidget()
+        box = QVBoxLayout(page)
+        box.setContentsMargins(0, 0, 0, 0)
+        box.setSpacing(12)
+        box.addWidget(form)
+        box.addWidget(label("自定义翻译模型", "h2"))
+        box.addWidget(label("启用后字幕先交给它翻译；它出错、超时或拒绝翻译的句子由 Hy-MT2 翻译"
+                            "（Hy-MT2 停用时只替换术语）。", "hint", wrap=True))
+        box.addWidget(self._custom())
+        return page
+
+    def _custom(self) -> QWidget:
+        form, c = Form(), self.cfg.translate.custom
+        kind = self._combo("translate.custom.backend", CUSTOM_KINDS, lambda: kind_changed())
+        form.add("类型", kind)
+
+        presets = QHBoxLayout()
+        address = self._line("translate.custom.base_url", "http://127.0.0.1:11434")
+        model = self._line("translate.custom.model", "例如 qwen2.5:7b、deepseek-flash")
+        key = self._line("translate.custom.api_key", "本机服务一般不需要", secret=True)
+        thinking = QCheckBox("关闭模型的「思考」阶段（DeepSeek、Qwen3 等需要，否则又慢又可能返回空）")
+        thinking.setChecked(c.extra_body.get("thinking") == NO_THINKING)
+
+        def set_thinking(on: bool) -> None:
+            extra = {k: v for k, v in c.extra_body.items() if k != "thinking"}
+            self.set("translate.custom.extra_body", {**extra, "thinking": NO_THINKING} if on else extra)
+
+        thinking.toggled.connect(set_thinking)
+
+        def preset(url: str, name) -> None:
+            self.set("translate.custom.base_url", url)
+            address.setText(url)
+            if name:
+                self.set("translate.custom.model", name)
+                model.setText(name)
+                thinking.setChecked(True)
+            changed()
+
+        service = [address, model, key, thinking]  # used only with a server at an address
+        for text, url, name in CUSTOM_PRESETS:
+            service.append(button(text, on_click=lambda u=url, n=name: preset(u, n)))
+            presets.addWidget(service[-1])
+        presets.addStretch(1)
+
+        files = QComboBox()
+        files.setMinimumWidth(260)
+        models = self.cfg.models_path
+        found = (sorted(f.name for f in models.glob("*.gguf") if f.name != CAPTION_MODEL)
+                 if models.is_dir() else [])
+        if c.model_file and c.model_file not in found:
+            found.append(c.model_file)
+        files.addItem("（选择文件）", "")
+        for name in found:
+            files.addItem(name, name)
+        files.setCurrentIndex(max(0, files.findData(c.model_file)))
+        files.currentIndexChanged.connect(
+            lambda _i: (self.set("translate.custom.model_file", files.currentData()), changed()))
+        prompt = self._combo("translate.custom.prompt", [("generic", "通用聊天模型"),
+                                                         ("hy-mt", "Hy-MT 系列翻译模型")])
+        timeout = self._spin("translate.custom.timeout", 0.5, 10.0, 0.5, " 秒")
+        partials = self._check("translate.custom.partials", "说话过程中的半句字幕也用它翻译")
+        risk = label(ONLINE_RISK, wrap=True)
+        risk.setStyleSheet(f"color: {WARN};")
+        problem = label("", wrap=True)
+        problem.setStyleSheet(f"color: {WARN};")
+
+        form.add("", presets)
+        form.add("服务地址", address, wide=True)
+        form.grid.addWidget(risk, form._row - 2, 1)
+        form.add("模型名称", model, wide=True)
+        form.add("API Key", key, "保存在本机的 valoroyce.state.json 里，别把这个文件发给别人。", wide=True)
+        form.add("", thinking)
+        form.add("模型文件", files, "把 .gguf 文件放进模型文件夹（「关于」页可以打开它），再重新打开这个窗口。"
+                 "它和 Hy-MT2 各占一份显存。")
+        form.add("提示词格式", prompt)
+        form.add("超时", timeout, "超过这个时间还没译完，这一句改用 Hy-MT2。连续出错时暂停使用它 30 秒。"
+                 "实测 DeepSeek 每句约 0.8 到 1.6 秒，Hy-MT2 约 0.7 秒。")
+        form.add("半句字幕", partials, "关闭时，说话过程中的半句仍由 Hy-MT2 翻译，说完的整句才发给它。"
+                 "打开后请求会多好几倍，在线服务的费用也会增加。")
+        form.add("", problem, wide=True)
+
+        def kind_changed() -> None:
+            if c.backend:
+                state.save(custom_kind=c.backend)  # what "启用" on the models page brings back
+            if c.backend == "llama":  # served by us, on a port of its own
+                self.set("translate.custom.base_url", CUSTOM_PORT)
+                address.setText(CUSTOM_PORT)
+            elif c.backend == "openai" and c.base_url == CUSTOM_PORT:
+                self.set("translate.custom.base_url", CUSTOM_PRESETS[0][1])
+                address.setText(c.base_url)
+            changed()
+
+        def changed() -> None:
+            k = c.backend
+            for w in service:
+                w.setEnabled(k == "openai")
+            files.setEnabled(k == "llama")
+            for w in (prompt, timeout, partials):
+                w.setEnabled(bool(k))
+            risk.setVisible(k == "openai" and is_online(c.base_url))
+            trouble = custom_problem(self.cfg) if k else ""
+            problem.setText(f"还不能使用：{trouble}" if trouble else "")
+            problem.setVisible(bool(trouble))
+            self.models.refresh()
+
+        for w in (address, model, key):
+            w.editingFinished.connect(changed)
+        changed()
         return form
 
     def _compose(self) -> QWidget:

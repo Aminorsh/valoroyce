@@ -382,3 +382,37 @@ def test_every_page_builds_and_the_window_can_be_reopened(window):
     window.open("models")  # pages are built anew; the models page is the same object
     assert window.stack.count() == len(PAGES) and window.models.parent() is not None
     assert window.stack.widget(0).widget().findChild(type(window.models)) is window.models
+
+
+def test_an_own_caption_model_is_switched_on_set_up_and_warned_about(window):
+    from valoroyce.settings import CUSTOM_PORT, PAGES, custom_problem
+
+    page, cfg = window.models, window.host.cfg
+    custom = cfg.translate.custom
+    assert page.custom.status.text() == "未启用" and not page.custom.enable.isChecked()
+    page.toggle_custom(True)  # a service by default, and the page to set it up opens
+    assert custom.backend == "openai" and page.custom.enable.isChecked()
+    assert window.nav.currentRow() == [key for key, _ in PAGES].index("translate")
+    assert custom_problem(cfg) == "还没填模型名称" and "还没填模型名称" in page.custom.status.text()
+
+    window.set("translate.custom.model", "qwen2.5:7b")  # Ollama on this computer: nothing more
+    assert custom_problem(cfg) == "" and "本机服务 127.0.0.1:11434" in page.custom.status.text()
+    window.set("translate.custom.base_url", "https://api.deepseek.com")
+    assert custom_problem(cfg) == "在线服务需要 API Key"
+    window.set("translate.custom.api_key", "sk-test")
+    page.refresh()
+    assert "在线服务 api.deepseek.com" in page.custom.status.text()
+    window._build_pages()
+    risk = [w for w in window.stack.widget(3).findChildren(type(page.custom.status))
+            if "每一句话" in w.text()]
+    assert risk and not risk[0].isHidden()  # the risk is stated next to the address
+
+    page.toggle_custom(False)
+    assert custom.backend == "" and page.custom.status.text() == "未启用"
+    state.save(custom_kind="llama")  # a file of one's own was chosen last time
+    page.toggle_custom(True)
+    assert (custom.backend, custom.base_url) == ("llama", CUSTOM_PORT)
+    assert custom_problem(cfg) == "还没选模型文件"
+    state.apply(again := Config())
+    assert (again.translate.custom.backend, again.translate.custom.api_key) == ("llama", "sk-test")
+    assert window.host.changed[-1].startswith("translate.custom.")  # models reload on apply

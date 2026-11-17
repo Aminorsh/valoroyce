@@ -84,6 +84,32 @@ gpu_layers = 99
 threads = 4
 server_args = []
 
+[translate.custom]
+# A caption model of your own, tried first; the model above takes over any
+# sentence it fails on or does not answer within `timeout` seconds.
+# 自定义字幕翻译模型：优先使用；它出错、拒绝或超时的句子由上面的模型（Hy-MT2）翻译
+#   ""        none 不使用
+#   "openai"  a server that speaks OpenAI's API: Ollama, LM Studio, or an online
+#             service. An online service receives EVERY sentence that is heard,
+#             and some services alter sentences on some topics without saying so.
+#             兼容 OpenAI 接口的服务。在线服务会收到听到的每一句话，有的服务会悄悄改写某些话题的句子
+#   "llama"   a .gguf file of your own in models_dir, served at base_url (own port)
+#             自己的 .gguf 模型文件，用单独的端口
+backend = ""
+# Ollama: http://127.0.0.1:11434   LM Studio: http://127.0.0.1:1234
+base_url = "http://127.0.0.1:11434"
+# The key can also be set as the environment variable VALOROYCE_CAPTION_API_KEY.
+api_key = ""
+model = ""
+# "generic" for any chat model, "hy-mt" for Hy-MT models.
+prompt = "generic"
+timeout = 2.5
+# Send half-finished captions too (many more requests). Off: those stay on the model above.
+# 半句字幕也发给它（请求会多很多）；关闭时半句仍由上面的模型翻译
+partials = false
+extra_body = {}
+model_file = ""
+
 [glossary]
 # Your own term files, merged over the built-in list. 自己的术语文件
 extra = []

@@ -25,7 +25,7 @@ def cmd_run(args) -> int:
     from .audio import open_source
     from .fullspeed import full_speed
     from .pipeline import Pipeline
-    from .translate import make_translator
+    from .translate import make_caption_translator
 
     full_speed()  # the game is in front; Windows would run us in its efficiency mode
     cfg, glossary = _load(args)
@@ -41,8 +41,8 @@ def cmd_run(args) -> int:
         cfg.audio.realtime = False
     if args.device is not None:
         cfg.audio.device = args.device
-    if args.backend:
-        cfg.translate.backend = args.backend
+    if args.backend:  # an explicit choice on the command line: that model alone
+        cfg.translate.backend, cfg.translate.custom.backend = args.backend, ""
     if args.cpu:
         cfg.translate.gpu = False
 
@@ -52,7 +52,7 @@ def cmd_run(args) -> int:
         return run_overlay(cfg, glossary, echo=_print_caption, record=args.record)
 
     source = open_source(cfg.audio)
-    translator = make_translator(cfg.translate, glossary, cfg.models_path)
+    translator = make_caption_translator(cfg.translate, glossary, cfg.models_path)
     recording = None
     try:
         pipeline = Pipeline(cfg, source, translator, glossary, _print_caption)
@@ -101,12 +101,12 @@ def cmd_devices(args) -> int:
 
 def cmd_translate(args) -> int:
     """Translate typed text: checks the glossary and the model without audio."""
-    from .translate import make_translator
+    from .translate import make_caption_translator
 
     cfg, glossary = _load(args)
     if args.backend:
-        cfg.translate.backend = args.backend
-    translator = make_translator(cfg.translate, glossary, cfg.models_path)
+        cfg.translate.backend, cfg.translate.custom.backend = args.backend, ""
+    translator = make_caption_translator(cfg.translate, glossary, cfg.models_path)
     try:
         lines = args.text or [line.strip() for line in sys.stdin if line.strip()]
         for line in lines:
@@ -115,7 +115,8 @@ def cmd_translate(args) -> int:
             t0 = time.monotonic()
             out = translator.translate(fixed, "", hits)
             ms = (time.monotonic() - t0) * 1000
-            print(f"{ms:5.0f}ms  {out}    <- {fixed}")
+            why = getattr(translator, "fell_back", "")
+            print(f"{ms:5.0f}ms  {out}    <- {fixed}" + (f"    (fallback: {why})" if why else ""))
     finally:
         translator.close()
     return 0

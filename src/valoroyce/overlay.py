@@ -32,7 +32,7 @@ from .pipeline import Caption, Pipeline
 from .speech import make_recognizer
 from .record import Recording, describe
 from .rows import arrange, newest
-from .translate import make_compose_translator, make_translator
+from .translate import make_caption_translator, make_compose_translator
 
 PAD_X, PAD_Y, GAP = 14, 6, 6
 FONT_SIZES = [("小", 16), ("中", 22), ("大", 28), ("特大", 36)]
@@ -211,6 +211,7 @@ class Controller(QObject):
 
     ready = Signal(str)   # name of the audio source now being captioned
     failed = Signal(str)  # why (re)starting did not work
+    noted = Signal(str)   # why the player's own caption model is not being used
 
     def __init__(self, app: QApplication, cfg: Config, glossary: Glossary, echo=None):
         super().__init__()
@@ -248,6 +249,7 @@ class Controller(QObject):
 
         self.ready.connect(self._on_ready)
         self.failed.connect(self._on_failed)
+        self.noted.connect(self._on_noted)
         self._watchdog = QTimer(self)
         self._watchdog.timeout.connect(self._watch)
         self._watchdog.start(200)
@@ -538,8 +540,8 @@ class Controller(QObject):
                 self.translator.close()
                 self.translator = None
             if self.translator is None:
-                self.translator = make_translator(
-                    self.cfg.translate, self.glossary, self.cfg.models_path
+                self.translator = make_caption_translator(
+                    self.cfg.translate, self.glossary, self.cfg.models_path, self.noted.emit
                 )
             source = open_source(self.cfg.audio)
             if self._drop_recognizer:  # the settings ask for another one
@@ -590,6 +592,13 @@ class Controller(QObject):
         if self.from_file:
             self.exit_code = 1
             self.app.quit()
+
+    def _on_noted(self, why: str) -> None:
+        behind = {"llama": "Hy-MT2", "none": "术语替换"}.get(self.cfg.translate.backend,
+                                                          "config.toml 里的服务")
+        text = f"自定义翻译模型不可用，字幕暂时由 {behind} 翻译 · {why}"
+        self.window.notice(text, 10.0)
+        self.tray.showMessage("自定义翻译模型不可用", text, QSystemTrayIcon.MessageIcon.Warning, 8000)
 
     def _refresh_status(self) -> None:
         name = getattr(self, "source_name", "")
