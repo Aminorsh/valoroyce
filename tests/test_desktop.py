@@ -21,7 +21,9 @@ def test_a_taken_port_is_reported_with_what_to_do():
 
 def test_a_second_start_reaches_the_first(monkeypatch):
     pytest.importorskip("PySide6.QtNetwork")
-    monkeypatch.setenv("QT_QPA_PLATFORM", "offscreen")  # CI machines have no display
+    # Linux CI machines have no display, and may lack the libraries Qt's widgets load.
+    pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError)
+    monkeypatch.setenv("QT_QPA_PLATFORM", "offscreen")
     from PySide6.QtCore import QDeadlineTimer, QEventLoop
     from PySide6.QtWidgets import QApplication
 
