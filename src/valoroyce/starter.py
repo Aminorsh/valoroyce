@@ -332,8 +332,9 @@ class Window:
         self.root_dir, self.lines, self.result = root, queue.Queue(), None
         self.rate = Rate()
         self.cancel = threading.Event()
+        updating = (root / GUI).is_file()  # installed before: this is an update
         self.tk = tk.Tk()
-        self.tk.title("Valoroyce · 首次启动")
+        self.tk.title("Valoroyce · 更新" if updating else "Valoroyce · 首次启动")
         self.tk.geometry("620x360")
         self.tk.minsize(480, 300)
         icon = root / "src" / "valoroyce" / "data" / "icon.png"
@@ -349,7 +350,8 @@ class Window:
                                text="正在准备 Valoroyce，请稍候")
         self.title.pack(anchor="w")
         self.hint = ttk.Label(frame, wraplength=580, justify="left", text=(
-            "第一次启动和每次更新后需要下载运行组件。完成后程序会自动打开。\n"
+            "正在安装更新。完成后程序会自动打开。" if updating else
+            "第一次启动需要下载运行组件。完成后程序会自动打开。\n"
             "语音模型稍后在程序的「设置与模型」窗口里下载。"))
         self.hint.pack(anchor="w", pady=(6, 10))
         self.step = ttk.Label(frame, text="")
