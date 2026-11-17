@@ -19,8 +19,9 @@ def test_a_taken_port_is_reported_with_what_to_do():
     translate._port_free("127.0.0.1", port)  # free again: no error
 
 
-def test_a_second_start_reaches_the_first():
+def test_a_second_start_reaches_the_first(monkeypatch):
     pytest.importorskip("PySide6.QtNetwork")
+    monkeypatch.setenv("QT_QPA_PLATFORM", "offscreen")  # CI machines have no display
     from PySide6.QtCore import QDeadlineTimer, QEventLoop
     from PySide6.QtWidgets import QApplication
 
