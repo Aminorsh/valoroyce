@@ -27,11 +27,17 @@
 
 ## 安装
 
-**最简单的方式（Windows）**：到 [Releases](https://github.com/Aminorsh/valoroyce/releases) 下载 `valoroyce-…-windows.zip`，解压到一个路径里没有中文的文件夹，双击 `start.bat`。
+**Windows（推荐）**：到 [Releases](https://github.com/Aminorsh/valoroyce/releases) 下载 `Valoroyce-Setup-….exe`，双击安装。
 
-第一次启动会先安装运行环境，然后弹出**设置窗口**：点「一键下载推荐配置」，程序会按你的显卡选好模型、自动测速选最快的下载源（N 卡约 4 GB，其他约 1.4 GB，需要联网）。下载完字幕自动启动，之后可以离线使用。下载可以中途取消，下次接着下。
+- 安装程序没有数字签名，Windows 可能提示「Windows 已保护你的电脑」：点「更多信息」，再点「仍要运行」。
+- 不需要管理员权限。默认装在 `%LOCALAPPDATA%\Programs\Valoroyce`，也可以选别的文件夹。
+- 安装时选择要下载的模型：有 NVIDIA 显卡选 Whisper，没有就选 SenseVoice，再加翻译模型 Hy-MT2。也可以都不选，以后在设置窗口里随时下载。
+- 第一次启动先下载运行组件（约 115 MB），窗口里有进度条、速度和剩余时间。之后程序打开，开始下载你选的模型（N 卡约 4 GB，其他约 1.4 GB），自动选最快的下载源。下载完字幕自动启动，之后可以离线使用。下载可以中途取消，下次接着下。
+- **更新**：下载新版安装程序直接安装。它会先关掉正在运行的 Valoroyce，模型和设置都会保留。
+- **卸载**：Windows 设置 → 应用 → 「Valoroyce 实时字幕」。卸载时会问要不要同时删除模型、设置和录音。
+- 出问题时，安装文件夹里的 `valoroyce.log` 记录了程序的输出，提 issue 时请附上。
 
-从源码安装：
+从源码安装（开发用）：
 
 1. 安装 [uv](https://docs.astral.sh/uv/)（一个 Python 管理工具）。打开 PowerShell 粘贴：
 
@@ -182,8 +188,11 @@ uv run valoroyce run --cpu                    # 本次运行不使用显卡
 uv run valoroyce run --record                 # 把听到的声音和字幕存到 recordings/，反馈问题用
 uv run valoroyce translate "アイソがロングにいる"   # 直接测试术语和翻译
 uv run valoroyce say --to en "保安在B点"        # 中文 → 日语 / 英语
+uv run valoroyce quit                         # 关闭正在运行的 Valoroyce（连同它启动的翻译服务）
 uv run --extra dev pytest                     # 跑测试
 ```
+
+用安装程序装的版本没有 `uv run`：把上面的 `uv run valoroyce` 换成安装文件夹里的 `.venv\Scripts\valoroyce.exe`。
 
 ## 已知问题
 

@@ -1,6 +1,6 @@
 [project]
 name = "valoroyce"
-version = "0.2.0"
+version = "0.3.0"
 description = "Offline live captions for VALORANT voice chat: Japanese/English speech -> Chinese subtitles"
 readme = "README.md"
 license = "MIT"

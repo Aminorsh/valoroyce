@@ -31,11 +31,17 @@ The target language is Chinese because that is who the project was built for. Th
 
 ## Install
 
-**Easiest (Windows):** download `valoroyce-…-windows.zip` from [Releases](https://github.com/Aminorsh/valoroyce/releases), unpack it, and double-click `start.bat`.
+**Windows (recommended):** download `Valoroyce-Setup-….exe` from [Releases](https://github.com/Aminorsh/valoroyce/releases) and run it.
 
-The first start installs the runtime and then opens the **settings window** (in Chinese). Click "一键下载推荐配置" (download the recommended set): the program picks the models for your graphics card, times each download source and uses the fastest (about 4 GB with an NVIDIA card, about 1.4 GB otherwise; needs a network connection). Captions start by themselves when the download is done, and from then on it works offline. A download can be cancelled and continued later.
+- The installer is not signed, so Windows may say "Windows protected your PC": click "More info", then "Run anyway".
+- No administrator rights are needed. It installs to `%LOCALAPPDATA%\Programs\Valoroyce` unless you pick another folder.
+- The installer asks which models to download: Whisper with an NVIDIA card, SenseVoice without one, plus the translation model Hy-MT2. You may tick none and download them later from the settings window.
+- The first start downloads the runtime (about 115 MB) in a window with a progress bar, speed and time left. Then the program opens and fetches the models you picked (about 4 GB with an NVIDIA card, about 1.4 GB otherwise), from whichever source is fastest. Captions start by themselves when that is done, and from then on it works offline. Downloads can be cancelled and continued later.
+- **Updating**: run the newer installer. It closes a running Valoroyce first and keeps your models and settings.
+- **Uninstalling**: Windows Settings → Apps → "Valoroyce 实时字幕". It asks whether to delete the models, settings and recordings too.
+- If something goes wrong, `valoroyce.log` in the install folder holds the program's output. Please attach it to an issue.
 
-From source:
+From source (for development):
 
 1. Install [uv](https://docs.astral.sh/uv/), a Python manager. In PowerShell:
 
@@ -192,8 +198,11 @@ uv run valoroyce run --no-overlay             # no window; print captions to the
 uv run valoroyce run --cpu                    # keep translation off the GPU for this run
 uv run valoroyce translate "アイソがロングにいる"   # try the glossary and the model on text
 uv run valoroyce say --to en "保安在B点"        # Chinese -> Japanese / English
+uv run valoroyce quit                         # close a running Valoroyce (and the translation server it started)
 uv run --extra dev pytest                     # run the tests
 ```
+
+A copy installed with the installer has no `uv run`: use `.venv\Scripts\valoroyce.exe` in the install folder instead of `uv run valoroyce`.
 
 ## Known limitations
 
