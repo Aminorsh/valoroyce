@@ -157,7 +157,7 @@ def join(texts: list[str], lang: str) -> str:
 class Recognizer:
     """SenseVoice on the CPU: a few seconds of audio in tens of milliseconds."""
 
-    name, label = "SenseVoice (CPU)", "SenseVoice（CPU）"
+    id, name, label = "sensevoice", "SenseVoice (CPU)", "SenseVoice（CPU）"
 
     def __init__(self, models: Path, cfg: AsrConfig):
         self.cfg = cfg
@@ -257,7 +257,7 @@ class WhisperRecognizer:
     laptop RTX 4060 whatever the length, since the model always looks at a
     30-second window."""
 
-    name, label = "Whisper (graphics card)", "Whisper（显卡）"
+    id, name, label = "whisper", "Whisper (graphics card)", "Whisper（显卡）"
 
     def __init__(self, models: Path, cfg: AsrConfig):
         self.languages = cfg.languages or ["ja"]
@@ -313,16 +313,35 @@ class WhisperRecognizer:
         return Transcript(join([p.text for p in pieces], lang), lang, pieces)
 
 
+def sensevoice_unavailable(models: Path, cfg: AsrConfig) -> str:
+    if not (models / "sense-voice" / "model.int8.onnx").exists():
+        return f"its model is not in {models / 'sense-voice'} (get it with `valoroyce setup`)"
+    return ""
+
+
+RECOGNIZERS = {
+    "whisper": ("Whisper", WhisperRecognizer, whisper_unavailable),
+    "sensevoice": ("SenseVoice", Recognizer, sensevoice_unavailable),
+}
+
+
 def make_recognizer(models: Path, cfg: AsrConfig):
     backend = cfg.backend
     if backend == "auto":
-        problem = whisper_unavailable(models, cfg)
-        if problem:
-            print(f"note: recognising on the CPU with SenseVoice; Whisper is not used because {problem}",
+        unknown = [name for name in cfg.order if name not in RECOGNIZERS]
+        if unknown or not cfg.order:
+            raise ValueError(f"asr.order must list recognisers ({', '.join(RECOGNIZERS)}), "
+                             f"got {cfg.order!r}")
+        # The first that can run here. The last one is tried whatever its state,
+        # so that its own message says what is missing.
+        backend = cfg.order[-1]
+        for name in cfg.order[:-1]:
+            problem = RECOGNIZERS[name][2](models, cfg)
+            if not problem:
+                backend = name
+                break
+            print(f"note: {RECOGNIZERS[name][0]} is not used because {problem}",
                   file=sys.stderr, flush=True)
-        backend = "sensevoice" if problem else "whisper"
-    if backend == "whisper":
-        return WhisperRecognizer(models, cfg)
-    if backend == "sensevoice":
-        return Recognizer(models, cfg)
-    raise ValueError(f"unknown asr.backend: {cfg.backend!r} (auto, whisper or sensevoice)")
+    if backend not in RECOGNIZERS:
+        raise ValueError(f"unknown asr.backend: {cfg.backend!r} (auto, whisper or sensevoice)")
+    return RECOGNIZERS[backend][1](models, cfg)

@@ -7,6 +7,7 @@ run in "Windowed Fullscreen" (exclusive fullscreen hides every other window).
 
 from __future__ import annotations
 
+import gc
 import os
 import signal
 import sys
@@ -21,7 +22,7 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon, QWidget
 
-from . import state
+from . import catalog, state
 from .audio import list_devices, open_source
 from .compose import ComposeWindow
 from .config import Config, OverlayConfig
@@ -224,17 +225,19 @@ class Controller(QObject):
         self._welcomed = False
         self.from_file = cfg.audio.source == "file"
         self.recording: Recording | None = None
+        self.settings = None  # the settings window, made when first opened
+        # Parts of the config ("asr", "translate", ...) changed in the settings
+        # window since the models were loaded.
+        self.pending: set[str] = set()
+        self._drop_recognizer = False
         # Optional separate model for outgoing messages, loaded on first use.
         self._big = None
         self._big_wanted = bool(cfg.compose.backend)
         self._big_loading = False
+        self._big_settings = 0  # counts changes, so a model loaded for old settings is dropped
         self.compose = ComposeWindow(self._compose_translator, cfg.compose.target)
         self.hotkey = None
-        if cfg.compose.hotkey:
-            try:
-                self.hotkey = GlobalHotkey(app, cfg.compose.hotkey, self.open_compose)
-            except Exception as e:  # a shortcut is a convenience; never block start-up
-                print(f"warning: shortcut not available: {e}", file=sys.stderr)
+        self._register_hotkey()
 
         self.tray = QSystemTrayIcon(app_icon(), app)
         self.menu = QMenu()
@@ -257,28 +260,30 @@ class Controller(QObject):
         m.addAction(self.status)
         m.addSeparator()
 
-        label = "发消息（中文 → 日语 / 英语）…"
-        if self.hotkey and self.hotkey.registered:
-            label += "\t" + self.cfg.compose.hotkey.title()
-        send = QAction(label, m)
-        send.triggered.connect(self.open_compose)
-        m.addAction(send)
+        self.send = QAction(self._send_label(), m)
+        self.send.triggered.connect(self.open_compose)
+        m.addAction(self.send)
+        settings = QAction("设置与模型…", m)
+        settings.triggered.connect(lambda _=False: self.open_settings())
+        m.addAction(settings)
         m.addSeparator()
 
         self.pause = QAction("暂停字幕", m, checkable=True)
         self.pause.toggled.connect(self._set_paused)
-        move = QAction("调整位置", m, checkable=True)
-        move.toggled.connect(self.window.set_moving)
-        show_src = QAction("显示原文", m, checkable=True, checked=cfg.overlay.show_source)
-        show_src.toggled.connect(self._set_show_source)
+        self.move = QAction("调整位置", m, checkable=True)
+        self.move.toggled.connect(self.window.set_moving)
+        self.show_src = QAction("显示原文", m, checkable=True, checked=cfg.overlay.show_source)
+        self.show_src.toggled.connect(self._set_show_source)
         self.record = QAction("录音用于反馈问题（最长 10 分钟）", m, checkable=True)
         self.record.toggled.connect(self._set_recording)
-        m.addActions([self.pause, move, show_src, self.record])
+        m.addActions([self.pause, self.move, self.show_src, self.record])
 
         sizes = m.addMenu("字号")
         group = QActionGroup(sizes)
+        self.sizes: dict[int, QAction] = {}
         for label, size in FONT_SIZES:
-            a = QAction(label, sizes, checkable=True, checked=size == cfg.overlay.font_size)
+            a = self.sizes[size] = QAction(label, sizes, checkable=True,
+                                           checked=size == cfg.overlay.font_size)
             a.triggered.connect(lambda _=False, s=size: self._set_font_size(s))
             group.addAction(a)
             sizes.addAction(a)
@@ -323,6 +328,23 @@ class Controller(QObject):
             a.triggered.connect(lambda _=False, n=name: self._set_device(n))
             menu.addAction(a)
 
+    def _send_label(self) -> str:
+        label = "发消息（中文 → 日语 / 英语）…"
+        if self.hotkey and self.hotkey.registered:
+            label += "\t" + self.cfg.compose.hotkey.title()
+        return label
+
+    def _register_hotkey(self) -> None:
+        if self.hotkey:
+            self.hotkey.release()
+            self.app.removeNativeEventFilter(self.hotkey)
+            self.hotkey = None
+        if self.cfg.compose.hotkey:
+            try:
+                self.hotkey = GlobalHotkey(self.app, self.cfg.compose.hotkey, self.open_compose)
+            except Exception as e:  # a shortcut is a convenience; never block start-up
+                print(f"warning: shortcut not available: {e}", file=sys.stderr)
+
     def open_compose(self) -> None:
         self._compose_translator()  # start loading the message model, if any
         self.compose.open()
@@ -333,19 +355,100 @@ class Controller(QObject):
             return self.translator
         if self._big is None and not self._big_loading:
             self._big_loading = True
-            threading.Thread(target=self._load_big, daemon=True).start()
+            threading.Thread(target=self._load_big, args=(self._big_settings,), daemon=True).start()
         return self._big
 
-    def _load_big(self) -> None:
+    def _load_big(self, settings: int) -> None:
+        big = None
         try:
-            self._big = make_compose_translator(self.cfg, self.glossary, self.cfg.models_path,
-                                                fallback=lambda: self.translator)
+            big = make_compose_translator(self.cfg, self.glossary, self.cfg.models_path,
+                                          fallback=lambda: self.translator)
         except Exception as e:
             # Messages still work, on the caption model.
             print(f"warning: message model not available ({e}); using the caption model",
                   file=sys.stderr, flush=True)
-            self._big_wanted = False
-        self._big_loading = False
+        if settings != self._big_settings:  # changed while loading: this one is out of date
+            if big:
+                big.close()
+            return
+        self._big, self._big_wanted, self._big_loading = big, big is not None, False
+
+    # -- settings ------------------------------------------------------------------
+
+    def open_settings(self, page: str = "") -> None:
+        if self.settings is None:
+            from .settings import SettingsWindow
+
+            self.settings = SettingsWindow(self)
+        self.settings.open(page)
+
+    def setting_changed(self, name: str) -> None:
+        """A value of the config was changed in the settings window."""
+        part = name.split(".")[0]
+        if part == "overlay":
+            self.window.set_font_size(self.cfg.overlay.font_size)  # fonts, size and place anew
+            self.show_src.setChecked(self.cfg.overlay.show_source)
+            for size, action in self.sizes.items():
+                action.setChecked(size == self.cfg.overlay.font_size)
+            if not self.window.moving:
+                self.window.notice("字幕预览 · 这是一条示例字幕", 3.0)
+        elif name == "compose.target":
+            self.compose.set_target(self.cfg.compose.target)
+        elif name == "compose.hotkey":
+            self._register_hotkey()
+            self.send.setText(self._send_label())
+        elif part == "compose":  # another model for messages: loaded when the next one is typed
+            old, self._big = self._big, None
+            self._big_settings += 1
+            self._big_wanted, self._big_loading = bool(self.cfg.compose.backend), False
+            if old:
+                old.close()
+        else:
+            self.pending.add(part)  # needs models reloaded: see apply_pending
+
+    def apply_pending(self) -> None:
+        """Reload what the changed settings touch."""
+        if self.busy or not self.pending or self.pipeline is None:
+            return
+        changed, self.pending = self.pending, set()
+        self._drop_recognizer = "asr" in changed
+        self.start(new_translator="translate" in changed, note="正在应用新的设置…")
+
+    def uses(self, item) -> bool:
+        """Whether a model of the catalogue is loaded right now."""
+        if item.role == "asr":
+            return getattr(self.recognizer, "id", "") == item.id
+        if item.role == "translate":
+            return self.cfg.translate.backend == "llama" and self.translator is not None
+        return self.pipeline is not None
+
+    def halt(self) -> None:
+        """Stop captioning and let go of every model, so that one can be deleted."""
+        if self.pipeline:
+            self.pipeline.stop()
+            self.pipeline.join(3.0)
+            self.pipeline = None
+        if self.translator:
+            self.translator.close()
+            self.translator = None
+        self.recognizer = None
+        gc.collect()  # a recogniser on the graphics card gives its memory back here
+        self.status.setText("已停止")
+
+    def resume(self) -> None:
+        """Start captioning if everything it needs is here; otherwise say what is not."""
+        lacking = [] if self.from_file else catalog.missing(self.cfg)
+        if lacking:
+            self.status.setText("缺少模型（在「设置与模型」里下载）")
+            self.window.notice("还缺少模型：" + "、".join(i.title for i in lacking)
+                               + " · 请在设置窗口里下载", 3600.0)
+            return
+        self.pending.clear()
+        self.start()
+
+    def reset_position(self) -> None:
+        state.forget("x", "bottom")
+        self.window._place()
 
     def _set_recording(self, on: bool) -> None:
         """Save what is heard and what is shown, for a problem report."""
@@ -439,6 +542,10 @@ class Controller(QObject):
                     self.cfg.translate, self.glossary, self.cfg.models_path
                 )
             source = open_source(self.cfg.audio)
+            if self._drop_recognizer:  # the settings ask for another one
+                self._drop_recognizer = False
+                self.recognizer = None
+                gc.collect()
             if self.recognizer is None:  # loaded once: restarts keep it
                 self.recognizer = make_recognizer(self.cfg.models_path, self.cfg.asr)
             pipeline = Pipeline(self.cfg, source, self.translator, self.glossary, self._emit,
@@ -504,6 +611,8 @@ class Controller(QObject):
     def shutdown(self) -> None:
         self.tray.hide()
         self.compose.hide()
+        if self.settings:
+            self.settings.hide()
         if self._big:
             self._big.close()
         if self.hotkey:
@@ -532,7 +641,9 @@ def run_overlay(cfg: Config, glossary: Glossary, echo=None, record: bool = False
     controller.window.show()
     if record:
         controller.record.setChecked(True)
-    controller.start()
+    controller.resume()
+    if controller.pipeline is None and not controller.busy:
+        controller.open_settings("models")  # first start: something has to be downloaded
     try:
         app.exec()
     finally:

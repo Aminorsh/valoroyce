@@ -46,8 +46,11 @@ class AsrConfig:
     #                 of the card's memory.
     #   "sensevoice"  SenseVoice on the CPU: works everywhere, much less accurate
     #                 on real voice chat.
-    #   "auto"        Whisper when it can run here, otherwise SenseVoice.
+    #   "auto"        the first recogniser of `order` that can run here.
     backend: str = "auto"
+    # backend = "auto": the recognisers to try, in this order. One that is left
+    # out is never used, even if its model is downloaded.
+    order: list[str] = field(default_factory=lambda: ["whisper", "sensevoice"])
     # Languages we expect, first = default. Speech detected as anything else is
     # recognised again as the likeliest of these.
     languages: list[str] = field(default_factory=lambda: ["ja", "en"])

@@ -28,6 +28,9 @@ _MS = "https://modelscope.cn/models"
 PROBE_BYTES = 2_000_000
 PROBE_SECONDS = 4.0
 SMALL = 5_000_000  # below this, do not bother probing
+BIG = 500_000_000  # above this, probe thoroughly
+THOROUGH_BYTES = 40_000_000
+THOROUGH_SECONDS = 6.0
 
 
 @dataclass
@@ -147,13 +150,16 @@ def _request(url: str, start: int = 0) -> urllib.request.Request:
     return urllib.request.Request(url, headers=headers)
 
 
-def _probe(opener, url: str) -> float:
-    """Bytes per second over a short sample; 0 if unusable."""
+def _probe(opener, url: str, thorough: bool = False) -> float:
+    """Bytes per second over a short sample; 0 if unusable. `thorough` samples
+    longer: some routes start fast and slow down after a few megabytes, which
+    matters when a gigabyte follows."""
+    limit, seconds = (THOROUGH_BYTES, THOROUGH_SECONDS) if thorough else (PROBE_BYTES, PROBE_SECONDS)
     try:
         t0 = time.monotonic()
         got = 0
         with opener.open(_request(url), timeout=8) as resp:
-            while got < PROBE_BYTES and time.monotonic() - t0 < PROBE_SECONDS:
+            while got < limit and time.monotonic() - t0 < seconds:
                 chunk = resp.read(65536)
                 if not chunk:
                     break
@@ -163,18 +169,29 @@ def _probe(opener, url: str) -> float:
         return 0.0
 
 
-def _rank(urls: list[str], size: int):
+class Cancelled(Exception):
+    """The user stopped a download. What was fetched stays, to be resumed."""
+
+
+def _cli_progress(got: int, total: int, speed: float) -> None:
+    pct = f"{got * 100 / total:5.1f}%" if total else ""
+    print(f"\r  {got / 1e6:8.1f} MB {pct} {speed / 1e6:6.2f} MB/s ", end="", flush=True)
+
+
+def _rank(urls: list[str], size: int, say=print, cancel=None):
     """(opener, url, label) routes, best first."""
     openers = _openers()
     routes = [(op, url, label) for url in urls for label, op in openers.items()]
     if len(routes) == 1 or size < SMALL:
         return routes
-    print("  testing download speed...")
+    say("  testing download speed...")
     timed = []
     for op, url, label in routes:
-        speed = _probe(op, url)
+        if cancel is not None and cancel.is_set():
+            raise Cancelled()
+        speed = _probe(op, url, thorough=size > BIG)
         host = url.split("/")[2]
-        print(f"    {host}{label}: {speed / 1e6:6.2f} MB/s")
+        say(f"    {host}{label}: {speed / 1e6:6.2f} MB/s")
         if speed > 0:
             timed.append((speed, op, url, label))
     timed.sort(key=lambda r: -r[0])
@@ -189,7 +206,7 @@ def _sha256(path: Path) -> str:
     return h.hexdigest()
 
 
-def _fetch(opener, url: str, part: Path, size: int) -> None:
+def _fetch(opener, url: str, part: Path, size: int, progress, cancel) -> None:
     """Download to `part`, resuming whatever is already there."""
     have = part.stat().st_size if part.exists() else 0
     with opener.open(_request(url, have), timeout=30) as resp:
@@ -199,38 +216,52 @@ def _fetch(opener, url: str, part: Path, size: int) -> None:
         t0, last, got = time.monotonic(), 0.0, have
         with open(part, "ab" if have else "wb") as f:
             while chunk := resp.read(1 << 18):
+                if cancel is not None and cancel.is_set():
+                    raise Cancelled()
                 f.write(chunk)
                 got += len(chunk)
                 now = time.monotonic()
                 if now - last > 0.5:
                     last = now
-                    speed = (got - have) / max(now - t0, 1e-3) / 1e6
-                    pct = f"{got * 100 / total:5.1f}%" if total else ""
-                    print(f"\r  {got / 1e6:8.1f} MB {pct} {speed:6.2f} MB/s ", end="", flush=True)
-    print()
+                    progress(got, total, (got - have) / max(now - t0, 1e-3))
 
 
-def download(asset: Asset, models: Path, mirror: str) -> Path:
+def present(asset: Asset, models: Path) -> bool:
     dest = models / asset.dest
-    if dest.exists() and (not asset.size or dest.stat().st_size == asset.size):
-        print(f"ok       {asset.dest}")
+    return dest.exists() and (not asset.size or dest.stat().st_size == asset.size)
+
+
+def download(asset: Asset, models: Path, mirror: str, say=print, progress=None, cancel=None) -> Path:
+    """Fetch one file unless it is there already. `say` gets lines of status,
+    `progress` gets (bytes so far, total or 0, bytes per second), and setting
+    the `cancel` event stops the download with `Cancelled`."""
+    cli = progress is None
+    dest = models / asset.dest
+    if present(asset, models):
+        say(f"ok       {asset.dest}")
         return dest
-    print(f"download {asset.dest}" + (f"  - {asset.note}" if asset.note else ""))
+    say(f"download {asset.dest}" + (f"  - {asset.note}" if asset.note else ""))
     dest.parent.mkdir(parents=True, exist_ok=True)
     part = dest.with_name(dest.name + ".part")
     errors = []
-    for opener, url, label in _rank(asset.candidates(mirror), asset.size):
+    for opener, url, label in _rank(asset.candidates(mirror), asset.size, say, cancel):
         try:
-            print(f"  from {url.split('/')[2]}{label}")
-            _fetch(opener, url, part, asset.size)
+            say(f"  from {url.split('/')[2]}{label}")
+            try:
+                _fetch(opener, url, part, asset.size, _cli_progress if cli else progress, cancel)
+            finally:
+                if cli:
+                    print()  # end the line the progress was written on
             if asset.sha256 and _sha256(part) != asset.sha256:
                 part.unlink()
                 raise OSError("checksum mismatch")
             part.replace(dest)
             return dest
+        except Cancelled:
+            raise
         except Exception as e:  # try the next route, keeping the partial file
             errors.append(f"{url}: {e}")
-            print(f"  failed: {e}")
+            say(f"  failed: {e}")
     raise RuntimeError(
         f"could not download {asset.dest}. You can fetch it by hand and place it at "
         f"{dest}\n  " + "\n  ".join(errors or ["no reachable source"])
@@ -247,6 +278,19 @@ def _extract(archive: Path, target: Path) -> None:
             t.extractall(target, filter="data")
 
 
+def install_llama(models: Path, mirror: str = "auto", gpu: str = "vulkan", say=print,
+                  progress=None, cancel=None) -> None:
+    """The llama.cpp runtime, unpacked into models/llama."""
+    marker = models / "llama" / f".{LLAMA_BUILD}-{gpu}"
+    if marker.exists():
+        say("ok       llama.cpp runtime")
+        return
+    shutil.rmtree(models / "llama", ignore_errors=True)
+    for asset in llama_assets(gpu):
+        _extract(download(asset, models, mirror, say, progress, cancel), models / asset.extract_to)
+    marker.touch()
+
+
 def run_setup(models: Path, mirror: str = "auto", gpu: str = "vulkan", skip_llm: bool = False,
               whisper: bool = False) -> int:
     models.mkdir(parents=True, exist_ok=True)
@@ -255,14 +299,7 @@ def run_setup(models: Path, mirror: str = "auto", gpu: str = "vulkan", skip_llm:
         download(asset, models, mirror)
     if not skip_llm:
         download(LLM_ASSET, models, mirror)
-        marker = models / "llama" / f".{LLAMA_BUILD}-{gpu}"
-        if marker.exists():
-            print("ok       llama.cpp runtime")
-        else:
-            shutil.rmtree(models / "llama", ignore_errors=True)
-            for asset in llama_assets(gpu):
-                _extract(download(asset, models, mirror), models / asset.extract_to)
-            marker.touch()
+        install_llama(models, mirror, gpu)
     print("\nsetup complete. Start with: valoroyce")
     return 0
 

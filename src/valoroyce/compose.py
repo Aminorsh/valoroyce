@@ -50,8 +50,9 @@ class ComposeWindow(QWidget):
         langs = QHBoxLayout()
         langs.addWidget(QLabel("翻译成"))
         self._group = QButtonGroup(self)
+        self._buttons = {}
         for code, label in LANGUAGES:
-            button = QRadioButton(label)
+            button = self._buttons[code] = QRadioButton(label)
             button.setChecked(code == self.target)
             button.toggled.connect(lambda on, c=code: on and self._set_target(c))
             self._group.addButton(button)
@@ -72,6 +73,11 @@ class ComposeWindow(QWidget):
         layout.addWidget(self.result)
         layout.addWidget(self.status)
         self._finished.connect(self._on_finished)
+
+    def set_target(self, code: str) -> None:
+        """Choose the language from outside the box (the settings window)."""
+        if code in self._buttons and code != self.target:
+            self._buttons[code].setChecked(True)
 
     def _set_target(self, code: str) -> None:
         self.target = code

@@ -8,7 +8,7 @@
 
 ```
 你的电脑正在播放的声音 ──> 切句 ──> 语音识别 ──> 术语纠正 ──> 本地翻译模型 ──> 屏幕字幕
-   (系统回环录音)      (Silero VAD) (SenseVoice)  (内置瓦罗兰特词表)   (Hy-MT2 1.8B)
+   (系统回环录音)      (Silero VAD) (Whisper 或 SenseVoice) (内置词表)     (Hy-MT2 1.8B)
 ```
 
 - **完全本地**：模型下载完之后可以断网使用，不需要账号、不收费。
@@ -16,18 +16,20 @@
 - **边说边出字幕**：对方还没说完就先显示半句，说完后定稿。
 - **不碰游戏**：只是录系统声音加一个置顶的透明窗口，不读内存、不注入、不改游戏文件，和 OBS 录屏、歌词悬浮窗是同一类东西。
 
-> 状态：v0.1，早期版本。核心流程已在 Linux 上用音频文件跑通；**Windows 上的实时录音和悬浮窗还没有在真机实测**，遇到问题请提 issue。
+> 状态：早期版本。实时录音、悬浮窗和设置窗口已在一台 Windows 11 电脑（RTX 4060 笔记本显卡）上实际运行；真实对局里的识别效果还在改进，多人同时说话、背景音乐很响时仍然不可靠。遇到问题请提 issue。
 
 ## 需要什么
 
 - Windows 10 / 11（Linux、macOS 也能跑，主要用于开发）
-- 约 1.7 GB 磁盘空间放模型
-- 有独立显卡最好（翻译模型用显卡跑更快），没有也能用 CPU 跑
+- 有 **NVIDIA 显卡**最好：语音识别用 Whisper，准确得多（约占 1.3 GB 显存），翻译模型也更快。没有也能用：识别改用 CPU 上的 SenseVoice，准确度差不少
+- 磁盘空间：N 卡配置约 6 GB，其他约 1.5 GB
 - 游戏显示模式设为 **「窗口全屏」**。独占全屏下任何悬浮窗都显示不出来
 
 ## 安装
 
-**最简单的方式（Windows）**：到 [Releases](https://github.com/Aminorsh/valoroyce/releases) 下载 `valoroyce-…-windows.zip`，解压到一个路径里没有中文的文件夹，双击 `start.bat`。第一次启动会自动下载运行环境和模型（共约 2 GB，需要联网），之后可以离线使用。
+**最简单的方式（Windows）**：到 [Releases](https://github.com/Aminorsh/valoroyce/releases) 下载 `valoroyce-…-windows.zip`，解压到一个路径里没有中文的文件夹，双击 `start.bat`。
+
+第一次启动会先安装运行环境，然后弹出**设置窗口**：点「一键下载推荐配置」，程序会按你的显卡选好模型、自动测速选最快的下载源（N 卡约 4 GB，其他约 1.4 GB，需要联网）。下载完字幕自动启动，之后可以离线使用。下载可以中途取消，下次接着下。
 
 从源码安装：
 
@@ -38,14 +40,14 @@
    ```
 
 2. 下载本项目（`git clone`，或在 GitHub 页面点 Code → Download ZIP 并解压）。
-3. 双击 `start.bat`。第一次会自动安装依赖并下载模型（约 1.4 GB，会自动测速选最快的下载源），之后直接启动。
+3. 双击 `start.bat`。第一次会自动安装依赖，然后在设置窗口里下载模型，之后直接启动。
 
 手动方式（任何系统）：
 
 ```sh
-uv sync --extra app        # 安装依赖
-uv run valoroyce setup     # 下载模型和 llama.cpp；N 卡可加 --gpu cuda，无独显用 --gpu cpu
-uv run valoroyce           # 启动
+uv sync --extra app        # 安装依赖；要用 Whisper 再加 --extra whisper（约 1.3 GB 的显卡运行库）
+uv run valoroyce setup     # 下载模型和 llama.cpp；加 --whisper 同时下载 Whisper 模型
+uv run valoroyce           # 启动（缺模型时会打开设置窗口）
 ```
 
 ## 使用
@@ -54,6 +56,7 @@ uv run valoroyce           # 启动
 
 | 菜单项 | 作用 |
 |---|---|
+| 设置与模型… | 打开设置窗口（见下一节） |
 | 暂停字幕 | 临时关掉字幕，再点一次恢复 |
 | 调整位置 | 勾选后字幕条变成可拖动的蓝色框，拖到合适位置再取消勾选 |
 | 显示原文 | 在中文上方同时显示识别出的日语 / 英语 |
@@ -62,7 +65,19 @@ uv run valoroyce           # 启动
 | 声音来源 | 选择要听哪个播放设备（见下一节） |
 | 退出 | 关闭程序 |
 
-菜单里选过的东西会记住，下次启动沿用（保存在 `valoroyce.state.json`，删掉它即恢复默认）。
+### 设置窗口
+
+托盘菜单里点「设置与模型…」打开。改动会立刻记住；需要重新加载模型的改动，点窗口底部的「应用更改」或关闭窗口时生效（几秒钟）。
+
+| 页面 | 能做什么 |
+|---|---|
+| 模型 | 每个模型一张卡片，写着用途、适合的硬件、大小和当前状态。**下载 / 取消 / 继续下载**、**删除**（释放磁盘空间，可随时重新下载）、取消勾选**启用**（留着文件但不使用）。语音识别模型用 ▲ ▼ 调整**使用顺序**：从上到下依次尝试，用第一个能用的。顶部可以选下载源（自动测速 / 国内镜像 / 国际源） |
+| 字幕 | 字号、最多显示行数、停留时间、背景不透明度、宽度、是否显示原文、拖动调整位置 |
+| 声音与识别 | 声音来源（见「只翻译队友语音」）、识别语言、是否边说边出字幕、断句停顿 |
+| 翻译 | 翻译模型用显卡还是 CPU、是否翻译半句字幕 |
+| 发消息 | 目标语言、快捷键、是否改用在线服务（地址、模型名、API key） |
+
+设置窗口和菜单里改过的东西保存在 `valoroyce.state.json`，下次启动沿用，并且优先于 `config.toml`；删掉这个文件（或在「关于」页点「恢复默认设置」）即恢复默认。
 
 ### 给队友发文字消息
 
@@ -75,9 +90,9 @@ uv run valoroyce           # 启动
 
 #### 想翻得更地道：给「发消息」单独换一个模型（可选）
 
-默认情况下发消息和字幕共用同一个本地小模型，完全离线，但口语和梗翻得比较生硬。可以只给「发消息」换一个更强的模型，**字幕不受影响，始终在本地翻译**。在 `config.toml` 里加一段即可，两种方式任选：
+默认情况下发消息和字幕共用同一个本地小模型，完全离线，但口语和梗翻得比较生硬。可以只给「发消息」换一个更强的模型，**字幕不受影响，始终在本地翻译**。两种方式任选：
 
-**在线服务**（任何兼容 OpenAI 接口的服务都行，下面以 DeepSeek 为例，需要自己申请 API key）：
+**在线服务**（任何兼容 OpenAI 接口的服务都行，需要自己申请 API key）：在设置窗口的「发消息」页把模型改成「在线服务」，填上地址、模型名和 key 即可（有一个按钮可以填好 DeepSeek 的设置）。也可以写进 `config.toml`，下面以 DeepSeek 为例：
 
 ```toml
 [compose]
@@ -92,7 +107,7 @@ extra_body = { thinking = { type = "disabled" } }   # 关掉“思考”，否�
 - 需要联网，按服务商的价格计费（一句话很短，花费极少）。每句大约 1 秒。
 - 在线服务可能拒绝翻译某些句子（比如涉及政治的内容或很重的脏话）。遇到拒绝、断网或 key 失效时，这一句会**自动改用本地的字幕模型**翻译，输入框下方会提示。
 - 包含 `local_only` 里词语的句子不会发给在线服务，直接由本地模型翻译。默认只有一个词（见 `config.example.toml`），哪些词让在线服务翻得不对，自己加进去即可：`local_only = ["词1", "词2"]`。
-- `config.toml` 不会被提交到 git，但也别把带 key 的配置文件发给别人。
+- `config.toml` 和 `valoroyce.state.json`（设置窗口把 key 存在这里）不会被提交到 git，但也别把带 key 的文件发给别人。
 
 **本地的第二个模型**（仍然完全离线）：把一个 GGUF 格式的聊天模型（例如 Qwen3.5-4B 的 Q4_K_M 版，约 2.7 GB）放进 `models` 文件夹，然后：
 
@@ -106,7 +121,7 @@ model_file = "Qwen3.5-4B-Q4_K_M.gguf"
 
 ### 显卡还是 CPU？
 
-翻译模型默认放在显卡上跑，出字幕更快，但它会和游戏共用显卡（约占 1.5 GB 显存）。如果开着字幕时游戏掉帧或卡顿，在托盘菜单把「翻译运行在」切到 **CPU** 即可；CPU 模式下短句定稿大约 1 秒。
+翻译模型默认放在显卡上跑，出字幕更快，但它会和游戏共用显卡（约占 1.5 GB 显存；用 Whisper 识别时再加约 1.3 GB）。如果开着字幕时游戏掉帧或卡顿，在托盘菜单或设置窗口的「翻译」页把翻译切到 **CPU** 即可；CPU 模式下短句定稿大约 1 秒。显存只有 4 GB 的显卡建议一开始就这样设置。
 
 ## 只翻译队友语音（强烈建议）
 
@@ -115,14 +130,15 @@ model_file = "Qwen3.5-4B-Q4_K_M.gguf"
 1. 游戏内 设置 → 音频 → 语音聊天 → **输出设备**，选一个和游戏声音不同的设备。
    - 有些耳机自带「Game / Chat」两个设备，直接选 Chat 那个。
    - 只有一个设备的话，装一个虚拟声卡（如 VB-CABLE），把语音输出选成它，再在 Windows 声音设置里对这个虚拟设备勾选「侦听此设备」，转回你的耳机。
-2. 在托盘菜单的「声音来源」里选中这个设备。（也可以写进配置文件：`[audio] device = "CABLE"`，填设备名的一部分即可，`uv run valoroyce devices` 可以列出设备名。）
+2. 在托盘菜单的「声音来源」或设置窗口的「声音与识别」页里选中这个设备。（也可以写进配置文件：`[audio] device = "CABLE"`，填设备名的一部分即可，`uv run valoroyce devices` 可以列出设备名。）
 
 ## 配置
 
-把 `config.example.toml` 复制为 `config.toml` 再改，所有项都可以不写。常用的几个：
+常用的选项在设置窗口里都能改，不需要碰配置文件。想手写配置（或用到设置窗口里没有的选项）时，把 `config.example.toml` 复制为 `config.toml` 再改，所有项都可以不写。注意设置窗口里改过的项目优先于 `config.toml`。常用的几个：
 
 | 想做的事 | 配置 |
 |---|---|
+| 语音识别模型的使用顺序 | `[asr] order = ["whisper", "sensevoice"]`（没写进来的不会用） |
 | 只听日语（识别更稳） | `[asr] languages = ["ja"]` |
 | 字幕出得更快 / 更完整 | `[vad] min_silence = 0.25`（更快）或 `0.5`（少把一句话切碎） |
 | 字号、停留时间、位置 | `[overlay] font_size / linger / y` |
@@ -191,6 +207,7 @@ uv run --extra dev pytest                     # 跑测试
 代码以 [MIT](LICENSE) 许可发布。运行时下载的组件各有自己的许可：
 [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx)（Apache-2.0）、
 [SenseVoice](https://github.com/FunAudioLLM/SenseVoice)（模型许可见其仓库）、
+[Whisper large-v3-turbo](https://github.com/openai/whisper)（MIT）及 [faster-whisper](https://github.com/SYSTRAN/faster-whisper) / [CTranslate2](https://github.com/OpenNMT/CTranslate2)（MIT）、
 [Silero VAD](https://github.com/snakers4/silero-vad)（MIT）、
 [Hy-MT2](https://huggingface.co/tencent/Hy-MT2-1.8B-GGUF)（Apache-2.0）、
 [llama.cpp](https://github.com/ggml-org/llama.cpp)（MIT）。

@@ -1,5 +1,6 @@
 @echo off
-rem One-click start for Windows: install dependencies, fetch models on first run, launch.
+rem One-click start for Windows: install dependencies, then launch. Models are
+rem downloaded from the program's own settings window on the first start.
 cd /d "%~dp0"
 
 rem The release zip ships uv.exe next to this file; otherwise use an installed one.
@@ -15,15 +16,13 @@ if errorlevel 1 (
     exit /b 1
 )
 
-"%UV%" sync --extra app
+rem --inexact: keep what the settings window installed (the Whisper libraries).
+"%UV%" sync --extra app --inexact
 if errorlevel 1 goto failed
 
-if not exist "models\llama" (
-    "%UV%" run valoroyce setup
-    if errorlevel 1 goto failed
-)
-
-"%UV%" run valoroyce %*
+rem The settings window installs the Whisper libraries with this uv.
+set "VALOROYCE_UV=%UV%"
+"%UV%" run --no-sync valoroyce %*
 if errorlevel 1 goto failed
 exit /b 0
 

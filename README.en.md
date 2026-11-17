@@ -9,7 +9,8 @@
 ```
 what the PC is playing ──> split into ──> speech ──────> term ────────> local ─────────> on-screen
   (system loopback)        sentences      recognition    correction     translation      captions
-                           (Silero VAD)   (SenseVoice)   (glossary)     (Hy-MT2 1.8B)
+                           (Silero VAD)   (Whisper or    (glossary)     (Hy-MT2 1.8B)
+                                           SenseVoice)
 ```
 
 - **Fully local.** Once the models are downloaded it works with the network unplugged. No account, no fees, nothing uploaded.
@@ -17,20 +18,22 @@ what the PC is playing ──> split into ──> speech ──────> ter
 - **Captions while they are still talking.** A half-sentence appears first and is replaced by the final line.
 - **Does not touch the game.** It records system audio and draws an ordinary always-on-top transparent window. No memory reading, no injection, no modified game files: the same class of program as OBS or a desktop lyrics widget.
 
-> Status: v0.1, early. The whole pipeline runs on Linux from audio files. **Live capture and the caption window have not yet been tested on a real Windows machine.** Bug reports are welcome.
+> Status: early. Live capture, the caption window and the settings window have run on one Windows 11 PC (laptop RTX 4060). Recognition in real matches is still being improved; several people talking at once, or loud background music, remain unreliable. Bug reports are welcome.
 
 The target language is Chinese because that is who the project was built for. The translation target and the glossary are data, not code, so other targets are possible; see [Contributing](#contributing).
 
 ## Requirements
 
 - Windows 10 / 11. Linux and macOS run it too, mainly for development.
-- About 1.7 GB of disk space for models.
-- A discrete GPU helps (the translation model is faster on it) but is not required.
+- An **NVIDIA graphics card** is best: speech is then recognised with Whisper, which is far more accurate (about 1.3 GB of VRAM), and translation is faster too. Without one it still works: recognition falls back to SenseVoice on the CPU, which is clearly less accurate.
+- Disk space: about 6 GB with an NVIDIA card, about 1.5 GB otherwise.
 - The game set to **Windowed Fullscreen**. In exclusive fullscreen no overlay window can be shown.
 
 ## Install
 
-**Easiest (Windows):** download `valoroyce-…-windows.zip` from [Releases](https://github.com/Aminorsh/valoroyce/releases), unpack it, and double-click `start.bat`. The first start downloads the runtime and the models (about 2 GB in total, needs a network connection); after that it works offline.
+**Easiest (Windows):** download `valoroyce-…-windows.zip` from [Releases](https://github.com/Aminorsh/valoroyce/releases), unpack it, and double-click `start.bat`.
+
+The first start installs the runtime and then opens the **settings window** (in Chinese). Click "一键下载推荐配置" (download the recommended set): the program picks the models for your graphics card, times each download source and uses the fastest (about 4 GB with an NVIDIA card, about 1.4 GB otherwise; needs a network connection). Captions start by themselves when the download is done, and from then on it works offline. A download can be cancelled and continued later.
 
 From source:
 
@@ -41,14 +44,14 @@ From source:
    ```
 
 2. Get this project: `git clone`, or Code → Download ZIP on GitHub and unpack it.
-3. Double-click `start.bat`. The first run installs dependencies and downloads the models (about 1.4 GB; it times each download source and uses the fastest). Later runs start directly.
+3. Double-click `start.bat`. The first run installs dependencies, then the models are downloaded from the settings window. Later runs start directly.
 
 By hand, on any system:
 
 ```sh
-uv sync --extra app        # install dependencies
-uv run valoroyce setup     # models and llama.cpp; --gpu cuda for NVIDIA, --gpu cpu for no GPU
-uv run valoroyce           # start
+uv sync --extra app        # install dependencies; add --extra whisper for Whisper (about 1.3 GB of GPU libraries)
+uv run valoroyce setup     # models and llama.cpp; add --whisper for the Whisper model
+uv run valoroyce           # start (opens the settings window if a model is missing)
 ```
 
 ## Using it
@@ -57,6 +60,7 @@ A caption strip appears near the bottom of the screen, and a red speech-bubble i
 
 | Menu item | Meaning |
 |---|---|
+| 设置与模型… | Open the settings window (next section) |
 | 暂停字幕 | Pause captions; click again to resume |
 | 调整位置 | Move mode: the strip becomes a draggable blue box. Untick when done |
 | 显示原文 | Also show the recognised Japanese / English above the Chinese |
@@ -65,7 +69,19 @@ A caption strip appears near the bottom of the screen, and a red speech-bubble i
 | 声音来源 | Which playback device to listen to (see the next section) |
 | 退出 | Quit |
 
-Menu choices are remembered in `valoroyce.state.json` and override `config.toml`. Delete that file to return to the configured defaults.
+### The settings window
+
+"设置与模型…" in the tray menu opens it. A change is remembered at once; changes that need models reloaded take effect when you click "应用更改" (apply) at the bottom or close the window (a few seconds).
+
+| Page | What it does |
+|---|---|
+| 模型 (models) | One card per model: what it is for, the hardware it suits, its size and its state. **下载 / 取消 / 继续下载** (download, cancel, continue), **删除** (delete: frees the disk space, can be downloaded again any time), and untick **启用** (enabled) to keep the files but not use the model. Recognition models have ▲ ▼ to set the **order of use**: they are tried from the top and the first that can run is used. The download source is chosen at the top (fastest by test / mirrors in China / international) |
+| 字幕 (captions) | Font size, rows on screen, how long a caption stays, background opacity, width, original text on or off, dragging the strip |
+| 声音与识别 (sound and recognition) | Playback device to listen to (see "Caption only your teammates"), languages, captions while someone is still talking, the pause that ends a sentence |
+| 翻译 (translation) | Translation model on the GPU or the CPU, whether half-sentences are translated |
+| 发消息 (messages) | Target language, shortcut, an online service instead of the local model (address, model name, API key) |
+
+What is changed in the settings window or the tray menu is stored in `valoroyce.state.json` and overrides `config.toml`. Delete that file (or click "恢复默认设置" on the 关于 page) to return to the configured defaults.
 
 ### Sending text messages to teammates
 
@@ -80,7 +96,7 @@ To type to your team: choose "发消息（中文 → 日语 / 英语）…" in t
 
 By default, messages use the same small local model as the captions: fully offline, but stiff with casual speech and slang. You can give the message box a stronger model of its own. **Captions are not affected and are always translated locally.** Add one block to `config.toml`:
 
-**An online service** (anything that speaks OpenAI's API; DeepSeek shown here, you need your own API key):
+**An online service** (anything that speaks OpenAI's API; you need your own API key). The easy way: on the 发消息 page of the settings window choose "在线服务" and fill in the address, model name and key (a button fills in DeepSeek's values). Or in `config.toml`, DeepSeek shown here:
 
 ```toml
 [compose]
@@ -95,7 +111,7 @@ extra_body = { thinking = { type = "disabled" } }   # no "thinking": it is slow 
 - It needs a network connection and is billed by the provider (a message is a few dozen tokens). About one second per message.
 - Online services may decline some sentences (political content, heavy profanity). When the service declines, is unreachable, or rejects the key, that one message is **translated by the local caption model instead**, and the box says so.
 - A message containing a word listed in `local_only` is never sent to the service; the local model translates it. The default list has one entry (see `config.example.toml`). Add any word the service handles badly: `local_only = ["word1", "word2"]`.
-- `config.toml` is ignored by git, but do not share a config file that contains your key. The key can also be given as the environment variable `VALOROYCE_COMPOSE_API_KEY`.
+- `config.toml` and `valoroyce.state.json` (where the settings window keeps the key) are ignored by git, but do not share a file that contains your key. The key can also be given as the environment variable `VALOROYCE_COMPOSE_API_KEY`.
 
 **A second local model** (still fully offline): put a GGUF chat model (for example Qwen3.5-4B, Q4_K_M, about 2.7 GB) into the `models` folder, then:
 
@@ -109,7 +125,7 @@ It is loaded the first time the message box opens. Its tone is more natural than
 
 ### GPU or CPU?
 
-The translation model runs on the GPU by default, which gives faster captions but shares the card with the game (about 1.5 GB of VRAM). If the game stutters with captions on, switch "翻译运行在" to CPU. On CPU, a short line is finalised in roughly a second.
+The translation model runs on the GPU by default, which gives faster captions but shares the card with the game (about 1.5 GB of VRAM, plus about 1.3 GB when Whisper recognises). If the game stutters with captions on, switch translation to the CPU in the tray menu ("翻译运行在") or on the 翻译 page of the settings window. On CPU, a short line is finalised in roughly a second. On a card with only 4 GB, start with this setting.
 
 ## Caption only your teammates (strongly recommended)
 
@@ -118,14 +134,15 @@ By default it hears **everything** the PC plays, so gunfire, ability sounds and 
 1. In game: Settings → Audio → Voice Chat → **Output Device**. Pick a device different from the one playing game sound.
    - Some headsets expose separate "Game" and "Chat" devices. Pick Chat.
    - With a single device, install a virtual sound card such as VB-CABLE, send voice chat to it, and in Windows sound settings enable "Listen to this device" on it so the audio also reaches your headset.
-2. Pick that device under "声音来源" in the tray menu. (Or put it in the config: `[audio] device = "CABLE"`. Part of the name is enough; `uv run valoroyce devices` lists the names.)
+2. Pick that device under "声音来源" in the tray menu or on the 声音与识别 page of the settings window. (Or put it in the config: `[audio] device = "CABLE"`. Part of the name is enough; `uv run valoroyce devices` lists the names.)
 
 ## Configuration
 
-Copy `config.example.toml` to `config.toml` and edit. Every key is optional. The ones people change most:
+The common options are all in the settings window; no file needs editing. To write the configuration by hand (or for options the window does not have), copy `config.example.toml` to `config.toml` and edit. Every key is optional. Note that a value changed in the settings window overrides `config.toml`. The ones people change most:
 
 | To do this | Set |
 |---|---|
+| Order in which recognition models are tried | `[asr] order = ["whisper", "sensevoice"]` (one left out is never used) |
 | Expect Japanese only (more stable recognition) | `[asr] languages = ["ja"]` |
 | Faster captions, or fewer chopped sentences | `[vad] min_silence = 0.25` (faster) or `0.5` (fewer fragments) |
 | Font size, how long captions stay, position | `[overlay] font_size / linger / y` |
@@ -217,7 +234,8 @@ Everything is in `src/valoroyce/`. Each stage lives in one file and knows nothin
 | File | Job |
 |---|---|
 | `audio.py` | Audio sources (loopback, microphone, WAV file) yielding 16 kHz mono blocks; resampler |
-| `speech.py` | Sentence splitting (Silero VAD) and recognition (SenseVoice), both through sherpa-onnx |
+| `speech.py` | Sentence splitting (Silero VAD) and the two recognisers: Whisper on an NVIDIA card (faster-whisper), SenseVoice on the CPU (sherpa-onnx) |
+| `listener.py` | What counts as finished speech and what is shown while someone is still talking |
 | `glossary.py` | Term handling: fix the transcript, list the terms in a sentence, enforce names in the output |
 | `data/valorant.toml` | The built-in glossary |
 | `translate.py` | Translation backends, the prompt formats, and the llama.cpp child process |
@@ -226,7 +244,9 @@ Everything is in `src/valoroyce/`. Each stage lives in one file and knows nothin
 | `compose.py` | The message box: Chinese in, Japanese or English out to the clipboard |
 | `record.py` | Opt-in recording for problem reports: the audio as heard plus the captions shown |
 | `hotkey.py` | The system-wide shortcut that opens the message box (Windows) |
-| `state.py` | Remembered tray-menu choices |
+| `settings.py` | The settings window: models page, captions, sound, translation, messages |
+| `catalog.py` | The models and runtimes a user can download, switch off or remove; what a PC needs |
+| `state.py` | Choices made in the settings window and the tray menu, remembered between runs |
 | `config.py` | All settings and their defaults |
 | `setup.py` | Model and runtime downloads with source speed-testing and checksums |
 | `cli.py` | The `valoroyce` command |
@@ -254,6 +274,7 @@ Everything is in `src/valoroyce/`. Each stage lives in one file and knows nothin
 The code is released under the [MIT](LICENSE) licence. Components downloaded at run time have their own:
 [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) (Apache-2.0),
 [SenseVoice](https://github.com/FunAudioLLM/SenseVoice) (see its repository for the model licence),
+[Whisper large-v3-turbo](https://github.com/openai/whisper) (MIT) with [faster-whisper](https://github.com/SYSTRAN/faster-whisper) and [CTranslate2](https://github.com/OpenNMT/CTranslate2) (MIT),
 [Silero VAD](https://github.com/snakers4/silero-vad) (MIT),
 [Hy-MT2](https://huggingface.co/tencent/Hy-MT2-1.8B-GGUF) (Apache-2.0),
 [llama.cpp](https://github.com/ggml-org/llama.cpp) (MIT).
