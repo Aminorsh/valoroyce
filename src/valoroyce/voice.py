@@ -2,7 +2,8 @@
 
 Listening ends when the speaker pauses, when `stop()` is called (the shortcut
 pressed again), or after `MAX_SECONDS`. The sentence is recognised as Chinese
-by whatever recogniser the captions use. Nothing here touches the game: the
+by X-ASR when it is downloaded, else by the captions' recogniser (the caller
+chooses). Nothing here touches the game: the
 microphone is read the way any recording program reads it, beside the game.
 """
 

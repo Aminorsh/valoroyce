@@ -91,7 +91,7 @@ def cmd_setup(args) -> int:
 
     cfg = load_config(args.config)
     return run_setup(cfg.models_path, mirror=args.mirror, gpu=args.gpu, skip_llm=args.no_llm,
-                     whisper=args.whisper, whispercpp=args.whispercpp)
+                     whisper=args.whisper, whispercpp=args.whispercpp, xasr=args.xasr)
 
 
 def cmd_devices(args) -> int:
@@ -211,6 +211,8 @@ def main(argv: list[str] | None = None) -> int:
                    help="also fetch Whisper (1.6 GB): accurate recognition on an NVIDIA graphics card")
     s.add_argument("--whispercpp", action="store_true",
                    help="also fetch Whisper for whisper.cpp (0.9 GB): any graphics card, AMD and Intel too (Windows)")
+    s.add_argument("--xasr", action="store_true",
+                   help="also fetch X-ASR (0.14 GB): Chinese recognition for spoken messages, on the CPU")
     s.set_defaults(fn=cmd_setup)
 
     d = sub.add_parser("devices", help="list audio devices")

@@ -182,6 +182,10 @@ class ComposeConfig:
     # Microphone for spoken messages: part of its name (see `valoroyce
     # devices`). Empty = the system's default microphone.
     mic: str = ""
+    # Which model hears spoken messages. "x-asr": X-ASR, a Chinese model on
+    # the CPU, once downloaded (much better at short Chinese callouts than
+    # Whisper). "": the caption recogniser.
+    voice_model: str = "x-asr"
     # Which model writes your messages. Captions are not affected.
     #   ""        the caption model (nothing extra to set up)
     #   "llama"   a second local model, `model_file` inside models_dir, started

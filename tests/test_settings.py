@@ -109,7 +109,7 @@ def test_what_is_missing_follows_the_settings(tmp_path, monkeypatch):
     cfg.models_dir = str(tmp_path)
     # NVIDIA too gets Whisper through whisper.cpp first
     assert [i.id for i in catalog.missing(cfg)] == ["vad", "whispercpp", "hy-mt2"]
-    assert [i.id for i in catalog.recommended()] == ["vad", "whispercpp", "hy-mt2"]
+    assert [i.id for i in catalog.recommended()] == ["vad", "whispercpp", "hy-mt2", "x-asr"]
     here.add("whisper")  # an install from before: faster-whisper will do, nothing is missing
     assert [i.id for i in catalog.missing(cfg)] == ["vad", "hy-mt2"]
     here.discard("whisper")
@@ -127,7 +127,7 @@ def test_what_is_missing_follows_the_settings(tmp_path, monkeypatch):
     cfg = Config()
     cfg.models_dir = str(tmp_path)
     assert [i.id for i in catalog.missing(cfg)] == ["vad", "sensevoice", "hy-mt2"]
-    assert [i.id for i in catalog.recommended()] == ["vad", "sensevoice", "hy-mt2"]
+    assert [i.id for i in catalog.recommended()] == ["vad", "sensevoice", "hy-mt2", "x-asr"]
     assert "NVIDIA" in catalog.WHISPER.blocked()
 
 
@@ -368,7 +368,7 @@ def test_the_first_start_offers_what_this_pc_needs(window):
     started = []
     page.start = lambda item: started.append(item.id)
     page.download_recommended()
-    assert started == ["vad", "whispercpp", "hy-mt2"]
+    assert started == ["vad", "whispercpp", "hy-mt2", "x-asr"]
 
 
 def test_a_finished_download_starts_captions_and_a_failed_one_says_why(window, monkeypatch):
@@ -438,3 +438,12 @@ def test_an_own_caption_model_is_switched_on_set_up_and_warned_about(window):
     state.apply(again := Config())
     assert (again.translate.custom.backend, again.translate.custom.api_key) == ("llama", "sk-test")
     assert window.host.changed[-1].startswith("translate.custom.")  # models reload on apply
+
+
+def test_spoken_messages_can_leave_x_asr_off(window):
+    page, cfg = window.models, window.host.cfg
+    assert cfg.compose.voice_model == "x-asr" and page.enabled(catalog.XASR)
+    page.toggle(catalog.XASR, False)
+    assert cfg.compose.voice_model == "" and not page.enabled(catalog.XASR)
+    page.toggle(catalog.XASR, True)
+    assert cfg.compose.voice_model == "x-asr"

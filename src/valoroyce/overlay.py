@@ -219,6 +219,7 @@ class Controller(QObject):
         self.window = CaptionWindow(cfg.overlay)
         self.pipeline: Pipeline | None = None
         self.recognizer = None
+        self.voice_asr = None  # X-ASR for spoken messages, made when first needed
         self.translator = None
         self.busy = False
         self.exit_code = 0
@@ -373,6 +374,7 @@ class Controller(QObject):
 
     def open_compose(self) -> None:
         self._compose_translator()  # start loading the message model, if any
+        self._voice_recognizer()  # and the one for spoken messages
         self.compose.open()
 
     def speak_compose(self) -> None:
@@ -381,11 +383,27 @@ class Controller(QObject):
 
     def _listen(self, on_state, on_done):
         """Start listening for a spoken message (the message box asks)."""
-        if self.recognizer is None:
-            raise RuntimeError("语音识别模型还在加载，请稍候再说")
         from .voice import listen
 
-        return listen(self.cfg, self.recognizer, on_state, on_done, self.glossary)
+        recognizer = self._voice_recognizer() or self.recognizer
+        if recognizer is None:
+            raise RuntimeError("语音识别模型还在加载，请稍候再说")
+        return listen(self.cfg, recognizer, on_state, on_done, self.glossary)
+
+    def _voice_recognizer(self):
+        """X-ASR for spoken messages when it is chosen and downloaded, else
+        None (the caption recogniser hears them). Loaded on first use."""
+        from . import xasr
+
+        if self.cfg.compose.voice_model != "x-asr" or not xasr.available(self.cfg.models_path):
+            self.voice_asr = None
+            return None
+        if self.voice_asr is None:
+            # Loading takes a few seconds: started now, it is done by the time
+            # the player has finished speaking.
+            self.voice_asr = xasr.Lazy(self.cfg.models_path)
+            threading.Thread(target=self.voice_asr.preload, name="x-asr", daemon=True).start()
+        return self.voice_asr
 
     def _compose_translator(self):
         """Translator for outgoing messages; None while their own model loads."""
@@ -438,6 +456,8 @@ class Controller(QObject):
             self.speak.setText(self._speak_label())
         elif name == "compose.mic":
             pass  # read when listening starts
+        elif name == "compose.voice_model":
+            self.voice_asr = None  # chosen anew when listening starts
         elif part == "compose":  # another model for messages: loaded when the next one is typed
             old, self._big = self._big, None
             self._big_settings += 1
@@ -461,6 +481,8 @@ class Controller(QObject):
             return getattr(self.recognizer, "id", "") == item.id
         if item.role == "translate":
             return self.cfg.translate.backend == "llama" and self.translator is not None
+        if item.role == "voice":
+            return self.voice_asr is not None and self.voice_asr.loaded
         return self.pipeline is not None
 
     def halt(self) -> None:
@@ -473,6 +495,7 @@ class Controller(QObject):
             self.translator.close()
             self.translator = None
         self.recognizer = None
+        self.voice_asr = None
         gc.collect()  # a recogniser on the graphics card gives its memory back here
         self.status.setText("已停止")
 

@@ -101,7 +101,8 @@ To type to your team: choose "发消息（中文 → 日语 / 英语）…" in t
 
 **Speak instead of typing**: press **Ctrl+Alt+V** (or "说话发消息" in the tray menu), say it in Chinese and pause: it is recognised, translated and copied at once. To check the recognised text first, press **Tab** in the box (or click 🎤) and speak: the Chinese is inserted at the cursor, and Enter translates it.
 
-- Recognition uses the captions' recogniser (Whisper works best). Agent, map and callout names are put right by how they sound (木蝶 → 暮蝶, 回房 → 回防).
+- Recognition uses **X-ASR**, a Chinese model (about 140 MB, CPU only, about 0.1 s a sentence), downloaded on the models page of the settings window. On the same 60 recorded callouts it made less than half of Whisper's mistakes. Without it, the captions' recogniser is used.
+- Agent, map and callout names are put right by how they sound, tones or not (木蝶 → 暮蝶, 杰峰 → 捷风, 回房 → 回防), and so are words recognisers often write instead (大局 → 大狙, 必保 → B包). Everyday words are left alone (大家 does not become 大甲).
 - Pick the microphone on the 发消息 page of the settings window; the system default is used otherwise.
 - Do not speak Chinese with the game's push-to-talk key; with open mic in the game, teammates hear it too.
 
@@ -281,6 +282,7 @@ Everything is in `src/valoroyce/`. Each stage lives in one file and knows nothin
 | `overlay.py` | The caption window, the tray menu, and restarting the pipeline when a menu choice changes |
 | `compose.py` | The message box: Chinese in (typed or said), Japanese or English out to the clipboard |
 | `voice.py` | A spoken message: one sentence from the microphone, recognised as Chinese, names put right by sound |
+| `xasr.py` | X-ASR, the Chinese recogniser for spoken messages, on the CPU, loaded when first needed |
 | `record.py` | Opt-in recording for problem reports: the audio as heard plus the captions shown |
 | `hotkey.py` | The system-wide shortcuts that open the message box, to type or to speak (Windows) |
 | `settings.py` | The settings window: models page, captions, sound, translation, messages |

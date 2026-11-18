@@ -370,6 +370,8 @@ class ModelsPage(QWidget):
                             "hint", wrap=True))
         box.addWidget(self.custom)
         box.addWidget(self.cards["hy-mt2"])
+        box.addWidget(label("说话发消息", "h2"))
+        box.addWidget(self.cards["x-asr"])
         box.addWidget(label("基础组件", "h2"))
         box.addWidget(self.cards["vad"])
         box.addStretch(1)
@@ -397,6 +399,8 @@ class ModelsPage(QWidget):
             return item.id in self.order()
         if item.role == "translate":
             return self.win.cfg.translate.backend == "llama"
+        if item.role == "voice":
+            return self.win.cfg.compose.voice_model == item.id
         return True
 
     def _set_order(self, order: list[str]) -> None:
@@ -407,6 +411,10 @@ class ModelsPage(QWidget):
     def toggle(self, item: catalog.Item, on: bool) -> None:
         if item.role == "translate":
             self.win.set("translate.backend", "llama" if on else "none")
+            self.refresh()
+            return
+        if item.role == "voice":
+            self.win.set("compose.voice_model", item.id if on else "")
             self.refresh()
             return
         order = self.order()

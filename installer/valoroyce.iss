@@ -66,7 +66,7 @@ var
   OptionsPage, ModelPage: TWizardPage;
   DesktopBox, StartupBox: TNewCheckBox;
   OptionsSeen: Boolean;
-  ModelBoxes: array[0..3] of TNewCheckBox;
+  ModelBoxes: array[0..4] of TNewCheckBox;
 
 function HasNvidia: Boolean;
 begin
@@ -164,6 +164,8 @@ begin
     '语音识别，只用 CPU，任何电脑都能用。', not HasNvidia);
   Top := AddModel(2, Top, 'Hy-MT2 1.8B（约 1.2 GB）',
     '本地翻译模型。', True);
+  Top := AddModel(4, Top, 'X-ASR 中文语音输入（约 140 MB）',
+    '说话发消息时识别你说的中文，只用 CPU。', True);
   AddText(ModelPage, Top + ScaleY(4), 0,
     '注意：语音识别目前只能在本机运行，识别模型一个都不选就没有字幕。翻译可以改用你自己的在线服务（需要 API 密钥），那样可以不下载翻译模型。');
 end;
@@ -213,6 +215,7 @@ begin
     if ModelBoxes[3].Checked then Chosen := Chosen + 'whispercpp' + #13#10;
     if ModelBoxes[1].Checked then Chosen := Chosen + 'sensevoice' + #13#10;
     if ModelBoxes[2].Checked then Chosen := Chosen + 'hy-mt2' + #13#10;
+    if ModelBoxes[4].Checked then Chosen := Chosen + 'x-asr' + #13#10;
     ForceDirectories(ExpandConstant('{app}'));
     SaveStringToFile(ExpandConstant('{app}\models-to-download.txt'), Chosen, False);
   end;

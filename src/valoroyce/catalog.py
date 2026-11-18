@@ -352,7 +352,7 @@ class Item:
     """One thing the user can download, switch off or remove."""
 
     id = ""
-    role = ""         # "asr", "translate" or "base"
+    role = ""         # "asr", "translate", "voice" (spoken messages) or "base"
     title = ""
     summary = ""      # what it is for
     hardware = ""     # what it wants from the PC
@@ -493,6 +493,27 @@ class _WhisperVulkan(Item):
         setup.install_whispercpp(models, mirror, say, progress, cancel)
 
 
+class _XAsr(Item):
+    id, role = "x-asr", "voice"
+    title = "X-ASR 中文语音输入"
+    summary = ("说话发消息时识别你说的中文。专门的中文模型，英雄名、A包、大狙这类短报点比 Whisper 准得多，"
+               "在 CPU 上约 0.1 秒一句，不占显卡。没下载时用字幕的识别模型。")
+    hardware = "任何电脑 · 不需要显卡"
+    paths = (setup.XASR_DIR, setup.XASR_ARCHIVE.dest)
+
+    def assets(self):
+        return [setup.XASR_ARCHIVE]
+
+    def installed(self, models):
+        return setup.xasr_present(models)
+
+    def download_bytes(self, models):
+        return 0 if self.installed(models) else setup.XASR_ARCHIVE.size
+
+    def install(self, models, mirror="auto", say=print, progress=None, cancel=None):
+        setup.install_xasr(models, mirror, say, progress, cancel)
+
+
 class _Translation(Item):
     id, role = "hy-mt2", "translate"
     title = "Hy-MT2 1.8B"
@@ -521,8 +542,8 @@ class _Translation(Item):
 
 
 VAD, SENSEVOICE, WHISPER, TRANSLATION = _Vad(), _SenseVoice(), _Whisper(), _Translation()
-WHISPER_VULKAN = _WhisperVulkan()
-ITEMS: dict[str, Item] = {i.id: i for i in (WHISPER, WHISPER_VULKAN, SENSEVOICE, TRANSLATION, VAD)}
+WHISPER_VULKAN, XASR = _WhisperVulkan(), _XAsr()
+ITEMS: dict[str, Item] = {i.id: i for i in (WHISPER, WHISPER_VULKAN, SENSEVOICE, TRANSLATION, XASR, VAD)}
 RECOGNIZERS = [WHISPER_VULKAN, WHISPER, SENSEVOICE]
 
 # Below this much memory on the card, Whisper beside the game and the
@@ -538,7 +559,7 @@ def recommended() -> list[Item]:
         asr = WHISPER
     else:
         asr = SENSEVOICE
-    return [VAD, asr, TRANSLATION]
+    return [VAD, asr, TRANSLATION, XASR]
 
 
 def advice() -> str:

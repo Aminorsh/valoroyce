@@ -118,6 +118,18 @@ WHISPERCPP_MODEL = Asset(
     size=874_188_075, note="speech recognition on any graphics card (Whisper large-v3-turbo, whisper.cpp)",
 )
 
+# Chinese for spoken messages: X-ASR (a zipformer transducer, Chinese and
+# English, Apache-2.0), as sherpa-onnx publishes it, 8-bit. Runs on the CPU.
+XASR_NAME = "sherpa-onnx-x-asr-zipformer-transducer-zh-en-int8-2026-06-03"
+XASR_DIR = "x-asr-zh-en"
+XASR_ARCHIVE = Asset(
+    f"downloads/{XASR_NAME}.tar.bz2",
+    {"global": [f"{_GH_SHERPA}/{XASR_NAME}.tar.bz2"]},
+    sha256="7592d1a1e9bc1e034c39fbaab9b0db8af46429d95d64c6e2a69593934af10e9c",
+    size=136_902_463,
+    extract_to=XASR_DIR, note="Chinese speech recognition for spoken messages (X-ASR)",
+)
+
 LLM_ASSET = Asset(
     "Hy-MT2-1.8B-Q4_K_M.gguf",
     {
@@ -326,8 +338,24 @@ def install_whispercpp(models: Path, mirror: str = "auto", say=print, progress=N
     (models / WHISPERCPP_DIR / f".{WHISPERCPP_VERSION}").touch()
 
 
+def xasr_present(models: Path) -> bool:
+    return (models / XASR_DIR / f".{XASR_NAME}").exists()
+
+
+def install_xasr(models: Path, mirror: str = "auto", say=print, progress=None, cancel=None) -> None:
+    """X-ASR, unpacked into models/x-asr-zh-en; the archive is removed after."""
+    if xasr_present(models):
+        say("ok       X-ASR")
+        return
+    shutil.rmtree(models / XASR_DIR, ignore_errors=True)
+    archive = download(XASR_ARCHIVE, models, mirror, say, progress, cancel)
+    _extract(archive, models / XASR_DIR)
+    (models / XASR_DIR / f".{XASR_NAME}").touch()
+    archive.unlink(missing_ok=True)
+
+
 def run_setup(models: Path, mirror: str = "auto", gpu: str = "vulkan", skip_llm: bool = False,
-              whisper: bool = False, whispercpp: bool = False) -> int:
+              whisper: bool = False, whispercpp: bool = False, xasr: bool = False) -> int:
     models.mkdir(parents=True, exist_ok=True)
     print(f"models directory: {models.resolve()}")
     for asset in SPEECH_ASSETS + (WHISPER_ASSETS if whisper else []):
@@ -338,6 +366,8 @@ def run_setup(models: Path, mirror: str = "auto", gpu: str = "vulkan", skip_llm:
         else:
             download(WHISPERCPP_MODEL, models, mirror)
             install_whispercpp(models, mirror)
+    if xasr:
+        install_xasr(models, mirror)
     if not skip_llm:
         download(LLM_ASSET, models, mirror)
         install_llama(models, mirror, gpu)

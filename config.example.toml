@@ -163,6 +163,10 @@ voice_hotkey = "ctrl+alt+v"
 # Microphone: part of its name (valoroyce devices). Empty = system default.
 # 麦克风：设备名的一部分；留空用系统默认麦克风
 mic = ""
+# Which model hears spoken messages: "x-asr" (Chinese, CPU, once downloaded)
+# or "" (the caption recogniser).
+# 识别说话发消息的模型："x-asr"（中文专用，CPU，下载后生效）；留空用字幕的识别模型
+voice_model = "x-asr"
 # Which model writes your messages. Captions are not affected.
 #   ""        the caption model (nothing extra to set up)
 #   "llama"   a second local model: model_file (a .gguf inside models_dir)
