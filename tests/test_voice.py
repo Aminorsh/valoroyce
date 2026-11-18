@@ -108,6 +108,7 @@ def test_nothing_recognised_asks_to_say_it_again():
 
 @pytest.fixture
 def box(monkeypatch):
+    pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError)  # a CI box without libEGL
     monkeypatch.setenv("QT_QPA_PLATFORM", "offscreen")
     from PySide6.QtWidgets import QApplication
 
@@ -153,6 +154,7 @@ def test_the_voice_shortcut_translates_at_once(box):
 
 
 def test_without_voice_there_is_no_microphone_button(monkeypatch):
+    pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError)
     monkeypatch.setenv("QT_QPA_PLATFORM", "offscreen")
     from PySide6.QtWidgets import QApplication
 

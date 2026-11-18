@@ -115,6 +115,7 @@ def test_real_server_recognises_japanese_and_english():
 def test_every_local_server_has_a_port_of_its_own():
     from urllib.parse import urlparse
 
+    pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError)  # the settings window's module
     from valoroyce.settings import CUSTOM_PORT
 
     cfg = Config()
