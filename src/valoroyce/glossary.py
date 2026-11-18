@@ -207,7 +207,7 @@ class Glossary:
                     continue
                 taken.append(span)
                 source, site = m.group(0), ""
-                if not term.forced and (pre := _SITE.search(text, 0, span[0])):
+                if term.kind == "place" and (pre := _SITE.search(text, 0, span[0])):
                     source, site = text[pre.start():span[1]], pre.group(1).upper()
                 if source.lower() not in seen:
                     seen.add(source.lower())
@@ -300,7 +300,7 @@ class Glossary:
                     continue  # "ak" inside a longer Latin word
                 if any(start < e and s < end for s, e in taken):
                     continue  # inside a longer term: "高台" in "高台下"
-                site = None if term.forced or lead else _SITE.search(text, 0, start)
+                site = _SITE.search(text, 0, start) if term.kind == "place" and not lead else None
                 if len(zh) == 1 and zh != term.zh and not (lead or site):
                     continue
                 taken.append((start, end))

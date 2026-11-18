@@ -189,3 +189,11 @@ def test_written_out_shorthand_still_gets_its_names():
     text, pairs = Glossary.load().outgoing("A大两个，中路大狙", "en")
     assert text == "A主道有两个敌人，中路有冥驹"
     assert ("A主道", "A main") in pairs and ("冥驹", "Operator") in pairs
+
+
+def test_an_article_is_not_a_site_letter(g):
+    """Only places take a site letter: "a flash" is not "A闪"."""
+    assert [h.zh for h in g.find("He bought a regen shield")] == ["再生甲"]
+    assert [h.zh for h in g.find("pop a flash")] == ["闪"]
+    assert [h.zh for h in g.find("two in A main")] == ["A主道"]
+    assert g.outgoing("我起个再生甲", "en")[1] == [("再生甲", "regen shield")]

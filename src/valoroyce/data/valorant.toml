@@ -4,6 +4,10 @@
 #   zh       the Chinese shown in captions
 #   kind     agent | weapon | map : names. Always forced into the caption.
 #            callout              : slang. Offered to the translator as a hint only.
+#            place                : a part of a map, as a callout; a site letter
+#                                   in front belongs to it ("A main" -> A主道)
+#   zh_heard what a recogniser wrote when a player said it in Chinese, where that
+#            is an ordinary word (大局 for 大狙); put right in spoken messages
 #   en / ja  spellings as the speech recogniser writes them; the first is canonical
 #   mishear  wrong transcriptions seen in practice, rewritten to the canonical
 #            spelling before translation
@@ -110,12 +114,12 @@ terms = [
   { zh = "强起", kind = "callout", en = ["force buy", "force"], ja = ["フォースバイ", "フォース"] },
   { zh = "探头", kind = "callout", en = ["peek"], ja = ["ピーク"] },
   { zh = "补枪", kind = "callout", en = ["trade"], ja = ["トレード", "カバー"] },
-  { zh = "中路", kind = "callout", en = ["mid"], ja = ["ミッド", "中央"] },
-  { zh = "长廊", kind = "callout", en = ["long"], ja = ["ロング"] },
-  { zh = "短道", kind = "callout", en = ["short"], ja = ["ショート"], zh_alias = ["小", "小道"] },
-  { zh = "高台", kind = "callout", en = ["heaven"], ja = ["ヘブン"] },
-  { zh = "高台下", kind = "callout", en = ["hell"], ja = ["ヘル"] },
-  { zh = "包点", kind = "callout", en = ["site"], ja = ["サイト"], zh_alias = ["点", "区"] },
+  { zh = "中路", kind = "place", en = ["mid"], ja = ["ミッド", "中央"] },
+  { zh = "长廊", kind = "place", en = ["long"], ja = ["ロング"] },
+  { zh = "短道", kind = "place", en = ["short"], ja = ["ショート"], zh_alias = ["小", "小道"] },
+  { zh = "高台", kind = "place", en = ["heaven"], ja = ["ヘブン"] },
+  { zh = "高台下", kind = "place", en = ["hell"], ja = ["ヘル"] },
+  { zh = "包点", kind = "place", en = ["site"], ja = ["サイト"], zh_alias = ["点", "区"] },
   { zh = "匪家", kind = "callout", en = ["T spawn", "attacker spawn"], ja = ["アタック側スポーン", "アタッカースポーン", "Tスポーン"] },
   # Chinese players say "CT" too, so it stays as it is. Recognisers hear it as "city".
   { zh = "CT", kind = "callout", en = ["CT", "CT spawn", "defender spawn"], ja = ["シーティー", "ディフェンス側スポーン", "ディフェンダースポーン"], mishear = ["シティ", "シティー", "city"], zh_alias = ["警家"] },
@@ -130,24 +134,25 @@ terms = [
 
   # Place names as the Japanese client labels them on the minimap. The Chinese
   # is a plain rendering, not checked against the Chinese client's own labels.
-  { zh = "主道", kind = "callout", en = ["main"], ja = ["メイン"], zh_alias = ["大", "大道"] },
-  { zh = "大厅", kind = "callout", en = ["lobby"], ja = ["ロビー"] },
-  { zh = "连接", kind = "callout", en = ["link"], ja = ["リンク"] },
-  { zh = "窗口", kind = "callout", en = ["window"], ja = ["ウィンドウ"] },
-  { zh = "塔", kind = "callout", en = ["tower"], ja = ["タワー"] },
-  { zh = "花园", kind = "callout", en = ["garden"], ja = ["ガーデン"] },
-  { zh = "通道", kind = "callout", en = ["hall"], ja = ["ホール"] },
-  { zh = "洞穴", kind = "callout", en = ["cave"], ja = ["ケイヴ"] },
-  { zh = "喷泉", kind = "callout", en = ["fountain"], ja = ["ファウンテン"] },
-  { zh = "拐角", kind = "callout", en = ["bend"], ja = ["ベンド"] },
-  { zh = "下层", kind = "callout", en = ["bottom"], ja = ["ボトム"] },
-  { zh = "上层", kind = "callout", en = ["top"], ja = ["トップ"] },
-  { zh = "跳台", kind = "callout", en = ["drop"], ja = ["ドロップ"] },
+  { zh = "主道", kind = "place", en = ["main"], ja = ["メイン"], zh_alias = ["大", "大道"] },
+  { zh = "大厅", kind = "place", en = ["lobby"], ja = ["ロビー"] },
+  { zh = "连接", kind = "place", en = ["link"], ja = ["リンク"] },
+  { zh = "窗口", kind = "place", en = ["window"], ja = ["ウィンドウ"] },
+  { zh = "塔", kind = "place", en = ["tower"], ja = ["タワー"] },
+  { zh = "花园", kind = "place", en = ["garden"], ja = ["ガーデン"] },
+  { zh = "通道", kind = "place", en = ["hall"], ja = ["ホール"] },
+  { zh = "洞穴", kind = "place", en = ["cave"], ja = ["ケイヴ"] },
+  { zh = "喷泉", kind = "place", en = ["fountain"], ja = ["ファウンテン"] },
+  { zh = "拐角", kind = "place", en = ["bend"], ja = ["ベンド"] },
+  { zh = "下层", kind = "place", en = ["bottom"], ja = ["ボトム"] },
+  { zh = "上层", kind = "place", en = ["top"], ja = ["トップ"] },
+  { zh = "跳台", kind = "place", en = ["drop"], ja = ["ドロップ"] },
 
   # Gear and ways of shooting, in the words Chinese players use.
   { zh = "刀", kind = "callout", en = ["knife"], ja = ["ナイフ"] },
   { zh = "半甲", kind = "callout", en = ["light armor", "light shield"], ja = ["ライトアーマー", "ライトシールド"], zh_alias = ["小甲"] },
   { zh = "全甲", kind = "callout", en = ["heavy armor", "heavy shield", "full armor"], ja = ["ヘビーアーマー", "ヘビーシールド"], zh_alias = ["大甲"], zh_heard = ["全价"] },
+  { zh = "再生甲", kind = "callout", en = ["regen shield", "regen armor"], ja = ["リジェネシールド"] },  # ja unverified
   { zh = "跑打", kind = "callout", en = ["run and gun", "running and gunning"], ja = ["走り撃ち"] },
   { zh = "混烟", kind = "callout", en = ["spam through smoke", "smoke spam"], ja = ["モク抜き"] },
   { zh = "一枪头", kind = "callout", en = ["one tap"], ja = ["ワンタップ"] },
