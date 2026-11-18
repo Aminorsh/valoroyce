@@ -25,8 +25,8 @@ The target language is Chinese because that is who the project was built for. Th
 ## Requirements
 
 - Windows 10 / 11. Linux and macOS run it too, mainly for development.
-- An **NVIDIA graphics card** is best: speech is then recognised with Whisper, which is far more accurate (about 1.3 GB of VRAM), and translation is faster too. Without one it still works: recognition falls back to SenseVoice on the CPU, which is clearly less accurate.
-- Disk space: about 6 GB with an NVIDIA card, about 1.5 GB otherwise.
+- A **graphics card of its own** is best: speech is then recognised with Whisper, which is far more accurate (about 1.2 to 1.3 GB of VRAM), and translation is faster too. NVIDIA cards run it through faster-whisper; AMD and Intel cards (3 GB of VRAM or more) through whisper.cpp with Vulkan, the same model, equally accurate on a whole recorded match. Without such a card it still works: recognition falls back to SenseVoice on the CPU, which is clearly less accurate.
+- Disk space: about 6 GB with an NVIDIA card, about 2.5 GB with AMD or Intel, about 1.5 GB otherwise.
 - The game set to **Windowed Fullscreen**. In exclusive fullscreen no overlay window can be shown.
 
 ## Install
@@ -35,7 +35,7 @@ The target language is Chinese because that is who the project was built for. Th
 
 - The installer is not signed, so Windows may say "Windows protected your PC": click "More info", then "Run anyway".
 - No administrator rights are needed. It installs to `%LOCALAPPDATA%\Programs\Valoroyce` unless you pick another folder.
-- The installer asks which models to download: Whisper with an NVIDIA card, SenseVoice without one, plus the translation model Hy-MT2. You may tick none and download them later from the settings window.
+- The installer asks which models to download: Whisper with an NVIDIA card, Whisper's Vulkan version with an AMD or Intel card, SenseVoice without either, plus the translation model Hy-MT2. You may tick none and download them later from the settings window.
 - The first start downloads the runtime (about 115 MB) in a window with a progress bar, speed and time left. Then the program opens and fetches the models you picked (about 4 GB with an NVIDIA card, about 1.4 GB otherwise), from whichever source is fastest. Captions start by themselves when that is done, and from then on it works offline. Downloads can be cancelled and continued later.
 - **Updating**: run the newer installer. It closes a running Valoroyce first and keeps your models and settings.
 - **Uninstalling**: Windows Settings → Apps → "Valoroyce 实时字幕". It asks whether to delete the models, settings and recordings too.
@@ -56,7 +56,7 @@ By hand, on any system:
 
 ```sh
 uv sync --extra app        # install dependencies; add --extra whisper for Whisper (about 1.3 GB of GPU libraries)
-uv run valoroyce setup     # models and llama.cpp; add --whisper for the Whisper model
+uv run valoroyce setup     # models and llama.cpp; add --whisper for the Whisper model, --whispercpp on AMD / Intel
 uv run valoroyce           # start (opens the settings window if a model is missing)
 ```
 
@@ -264,7 +264,8 @@ Everything is in `src/valoroyce/`. Each stage lives in one file and knows nothin
 |---|---|
 | `audio.py` | Audio sources (loopback, one program or all but one, microphone, WAV file) yielding 16 kHz mono blocks; resampler |
 | `apploop.py` | Windows application loopback in plain ctypes: the sound of one program (or of all but one), the list of programs playing sound |
-| `speech.py` | Sentence splitting (Silero VAD) and the two recognisers: Whisper on an NVIDIA card (faster-whisper), SenseVoice on the CPU (sherpa-onnx) |
+| `speech.py` | Sentence splitting (Silero VAD) and the recognisers: Whisper on an NVIDIA card (faster-whisper), SenseVoice on the CPU (sherpa-onnx) |
+| `whispercpp.py` | Whisper on any graphics card: whisper.cpp's `whisper-server` (Vulkan build from this repository's CI) as a child process |
 | `listener.py` | What counts as finished speech and what is shown while someone is still talking |
 | `glossary.py` | Term handling: fix the transcript, list the terms in a sentence, enforce names in the output |
 | `data/valorant.toml` | The built-in glossary |

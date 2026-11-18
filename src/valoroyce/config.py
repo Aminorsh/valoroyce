@@ -50,13 +50,15 @@ class AsrConfig:
     #   "whisper"     Whisper on an NVIDIA graphics card: the accurate one. Needs
     #                 its model (`valoroyce setup --whisper`) and about 1.3 GB
     #                 of the card's memory.
+    #   "whispercpp"  the same Whisper through whisper.cpp (Vulkan): graphics
+    #                 cards of any maker, AMD and Intel included. Windows.
     #   "sensevoice"  SenseVoice on the CPU: works everywhere, much less accurate
     #                 on real voice chat.
     #   "auto"        the first recogniser of `order` that can run here.
     backend: str = "auto"
     # backend = "auto": the recognisers to try, in this order. One that is left
     # out is never used, even if its model is downloaded.
-    order: list[str] = field(default_factory=lambda: ["whisper", "sensevoice"])
+    order: list[str] = field(default_factory=lambda: ["whisper", "whispercpp", "sensevoice"])
     # Languages we expect, first = default. Speech detected as anything else is
     # recognised again as the likeliest of these.
     languages: list[str] = field(default_factory=lambda: ["ja", "en"])
@@ -68,6 +70,9 @@ class AsrConfig:
     # held on the card ("int8_float16" needs half the memory of "float16").
     whisper_model: str = "whisper-large-v3-turbo"
     whisper_compute: str = "int8_float16"
+    # Whisper on other graphics cards (whisper.cpp, Vulkan): the model file
+    # inside models_dir.
+    whispercpp_model: str = "whisper-ggml/ggml-large-v3-turbo-q8_0.bin"
     # SenseVoice: CPU threads, and the onnxruntime provider ("cpu", "cuda" or
     # "directml"; the last two need a matching build).
     num_threads: int = 2

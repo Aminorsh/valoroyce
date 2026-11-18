@@ -21,7 +21,7 @@
 ## 需要什么
 
 - Windows 10 / 11（Linux、macOS 也能跑，主要用于开发）
-- 有 **NVIDIA 显卡**最好：语音识别用 Whisper，准确得多（约占 1.3 GB 显存），翻译模型也更快。没有也能用：识别改用 CPU 上的 SenseVoice，准确度差不少
+- 有**独立显卡**最好：语音识别用 Whisper，准确得多（约占 1.2 到 1.3 GB 显存），翻译模型也更快。NVIDIA 显卡用 faster-whisper；AMD、Intel 显卡（显存 3 GB 以上）用 whisper.cpp 的 Vulkan 版，同一个模型，在完整的一局对局录音上两者准确度相当。没有独立显卡也能用：识别改用 CPU 上的 SenseVoice，准确度差不少
 - 磁盘空间：N 卡配置约 6 GB，其他约 1.5 GB
 - 游戏显示模式设为 **「窗口全屏」**。独占全屏下任何悬浮窗都显示不出来
 
@@ -31,7 +31,7 @@
 
 - 安装程序没有数字签名，Windows 可能提示「Windows 已保护你的电脑」：点「更多信息」，再点「仍要运行」。
 - 不需要管理员权限。默认装在 `%LOCALAPPDATA%\Programs\Valoroyce`，也可以选别的文件夹。
-- 安装时选择要下载的模型：有 NVIDIA 显卡选 Whisper，没有就选 SenseVoice，再加翻译模型 Hy-MT2。也可以都不选，以后在设置窗口里随时下载。
+- 安装时选择要下载的模型：有 NVIDIA 显卡选 Whisper，AMD / Intel 独立显卡选 Whisper 的 Vulkan 版，都没有就选 SenseVoice，再加翻译模型 Hy-MT2。也可以都不选，以后在设置窗口里随时下载。
 - 第一次启动先下载运行组件（约 115 MB），窗口里有进度条、速度和剩余时间。之后程序打开，开始下载你选的模型（N 卡约 4 GB，其他约 1.4 GB），自动选最快的下载源。下载完字幕自动启动，之后可以离线使用。下载可以中途取消，下次接着下。
 - **更新**：下载新版安装程序直接安装。它会先关掉正在运行的 Valoroyce，模型和设置都会保留。
 - **卸载**：Windows 设置 → 应用 → 「Valoroyce 实时字幕」。卸载时会问要不要同时删除模型、设置和录音。
@@ -52,7 +52,7 @@
 
 ```sh
 uv sync --extra app        # 安装依赖；要用 Whisper 再加 --extra whisper（约 1.3 GB 的显卡运行库）
-uv run valoroyce setup     # 下载模型和 llama.cpp；加 --whisper 同时下载 Whisper 模型
+uv run valoroyce setup     # 下载模型和 llama.cpp；加 --whisper 同时下载 Whisper 模型，AMD / Intel 显卡加 --whispercpp
 uv run valoroyce           # 启动（缺模型时会打开设置窗口）
 ```
 

@@ -319,8 +319,11 @@ def sensevoice_unavailable(models: Path, cfg: AsrConfig) -> str:
     return ""
 
 
+from .whispercpp import WhisperCppRecognizer, unavailable as whispercpp_unavailable  # noqa: E402
+
 RECOGNIZERS = {
     "whisper": ("Whisper", WhisperRecognizer, whisper_unavailable),
+    "whispercpp": ("Whisper (Vulkan)", WhisperCppRecognizer, whispercpp_unavailable),
     "sensevoice": ("SenseVoice", Recognizer, sensevoice_unavailable),
 }
 
@@ -343,5 +346,5 @@ def make_recognizer(models: Path, cfg: AsrConfig):
             print(f"note: {RECOGNIZERS[name][0]} is not used because {problem}",
                   file=sys.stderr, flush=True)
     if backend not in RECOGNIZERS:
-        raise ValueError(f"unknown asr.backend: {cfg.backend!r} (auto, whisper or sensevoice)")
+        raise ValueError(f"unknown asr.backend: {cfg.backend!r} (auto, whisper, whispercpp or sensevoice)")
     return RECOGNIZERS[backend][1](models, cfg)

@@ -66,11 +66,19 @@ var
   OptionsPage, ModelPage: TWizardPage;
   DesktopBox, StartupBox: TNewCheckBox;
   OptionsSeen: Boolean;
-  ModelBoxes: array[0..2] of TNewCheckBox;
+  ModelBoxes: array[0..3] of TNewCheckBox;
 
 function HasNvidia: Boolean;
 begin
   Result := FileExists(ExpandConstant('{sys}\nvidia-smi.exe'));
+end;
+
+{ AMD's graphics driver is installed. Also true for AMD graphics built into
+  the processor, which is too small for Whisper: SenseVoice stays ticked too,
+  and the program uses whichever this PC can run. }
+function HasAmd: Boolean;
+begin
+  Result := FileExists(ExpandConstant('{sys}\atiadlxx.dll'));
 end;
 
 { A copy of the program is there already (with or without models). }
@@ -150,12 +158,14 @@ begin
   Top := Intro.Top + Intro.Height + ScaleY(14);
   Top := AddModel(0, Top, 'Whisper large-v3-turbo（约 2.9 GB）',
     '语音识别，最准确。需要 NVIDIA 显卡，含显卡运行库。', HasNvidia);
+  Top := AddModel(3, Top, 'Whisper large-v3-turbo，Vulkan 版（约 890 MB）',
+    '同一个模型换成 whisper.cpp 运行：AMD、Intel 独立显卡也能用。', HasAmd and not HasNvidia);
   Top := AddModel(1, Top, 'SenseVoice Small（约 240 MB）',
     '语音识别，只用 CPU，任何电脑都能用。', not HasNvidia);
   Top := AddModel(2, Top, 'Hy-MT2 1.8B（约 1.2 GB）',
     '本地翻译模型。', True);
   AddText(ModelPage, Top + ScaleY(4), 0,
-    '注意：语音识别目前只能在本机运行，两个识别模型都不选就没有字幕。翻译可以改用你自己的在线服务（需要 API 密钥），那样可以不下载翻译模型。');
+    '注意：语音识别目前只能在本机运行，识别模型一个都不选就没有字幕。翻译可以改用你自己的在线服务（需要 API 密钥），那样可以不下载翻译模型。');
 end;
 
 procedure CurPageChanged(CurPageID: Integer);
@@ -200,6 +210,7 @@ begin
   begin
     Chosen := '';
     if ModelBoxes[0].Checked then Chosen := Chosen + 'whisper' + #13#10;
+    if ModelBoxes[3].Checked then Chosen := Chosen + 'whispercpp' + #13#10;
     if ModelBoxes[1].Checked then Chosen := Chosen + 'sensevoice' + #13#10;
     if ModelBoxes[2].Checked then Chosen := Chosen + 'hy-mt2' + #13#10;
     ForceDirectories(ExpandConstant('{app}'));

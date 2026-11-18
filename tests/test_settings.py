@@ -116,6 +116,7 @@ def test_what_is_missing_follows_the_settings(tmp_path, monkeypatch):
     assert catalog.missing(cfg) == []
 
     monkeypatch.setattr(catalog, "nvidia_gpu", lambda: None)  # a PC without such a card
+    monkeypatch.setattr(catalog, "graphics_cards", lambda: ())  # nor any other
     here.clear()
     cfg = Config()
     cfg.models_dir = str(tmp_path)
@@ -321,6 +322,8 @@ def test_a_change_in_the_window_is_applied_remembered_and_passed_on(window):
 def test_recognisers_can_be_reordered_and_switched_off_but_not_all(window):
     page, cfg = window.models, window.host.cfg
     whisper, sensevoice = catalog.WHISPER, catalog.SENSEVOICE
+    assert page.order() == ["whisper", "whispercpp", "sensevoice"]
+    page.toggle(catalog.WHISPER_VULKAN, False)
     assert page.order() == ["whisper", "sensevoice"]
     page.move(whisper, 1)
     assert cfg.asr.order == ["sensevoice", "whisper"]

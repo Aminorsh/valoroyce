@@ -643,6 +643,9 @@ class Controller(QObject):
             self.recording.close()
         if self.translator:
             self.translator.close()
+        close = getattr(self.recognizer, "close", None)  # one that runs a server of its own
+        if close:
+            close()
 
 
 def run_overlay(cfg: Config, glossary: Glossary, echo=None, record: bool = False) -> int:

@@ -97,6 +97,27 @@ WHISPER_ASSETS = [
     ]
 ]
 
+# Whisper on graphics cards of any maker: whisper.cpp built with Vulkan by this
+# repository's CI (its own releases have no such Windows build), and the same
+# model in whisper.cpp's format, 8-bit. Both model sources hold the same file.
+WHISPERCPP_VERSION = "v1.9.5"
+WHISPERCPP_DIR = "whisper-cpp"
+_WHISPERCPP_ZIP = f"whisper-{WHISPERCPP_VERSION}-bin-win-vulkan-x64.zip"
+WHISPERCPP_RUNTIME = Asset(
+    f"downloads/{_WHISPERCPP_ZIP}",
+    {"global": [f"https://github.com/Aminorsh/valoroyce/releases/download/"
+                f"whisper.cpp-{WHISPERCPP_VERSION}-vulkan/{_WHISPERCPP_ZIP}"]},
+    sha256="bfdc3dd2ac30292ff8abf1b861ebc1276051787368dc5942662f816e0cc2c388",
+    size=14_841_322, extract_to=WHISPERCPP_DIR, note="whisper.cpp runtime (Vulkan)",
+)
+WHISPERCPP_MODEL = Asset(
+    "whisper-ggml/ggml-large-v3-turbo-q8_0.bin",
+    {"global": [f"{_HF}/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q8_0.bin"],
+     "cn": [f"{_MS}/GamePP/whisper-ggml/resolve/master/ggml-large-v3-turbo-q8_0.bin"]},
+    sha256="317eb69c11673c9de1e1f0d459b253999804ec71ac4c23c17ecf5fbe24e259a1",
+    size=874_188_075, note="speech recognition on any graphics card (Whisper large-v3-turbo, whisper.cpp)",
+)
+
 LLM_ASSET = Asset(
     "Hy-MT2-1.8B-Q4_K_M.gguf",
     {
@@ -291,12 +312,32 @@ def install_llama(models: Path, mirror: str = "auto", gpu: str = "vulkan", say=p
     marker.touch()
 
 
+def whispercpp_runtime_present(models: Path) -> bool:
+    return (models / WHISPERCPP_DIR / f".{WHISPERCPP_VERSION}").exists()
+
+
+def install_whispercpp(models: Path, mirror: str = "auto", say=print, progress=None, cancel=None) -> None:
+    """The whisper.cpp runtime (Windows, Vulkan), unpacked into models/whisper-cpp."""
+    if whispercpp_runtime_present(models):
+        say("ok       whisper.cpp runtime")
+        return
+    shutil.rmtree(models / WHISPERCPP_DIR, ignore_errors=True)
+    _extract(download(WHISPERCPP_RUNTIME, models, mirror, say, progress, cancel), models / WHISPERCPP_DIR)
+    (models / WHISPERCPP_DIR / f".{WHISPERCPP_VERSION}").touch()
+
+
 def run_setup(models: Path, mirror: str = "auto", gpu: str = "vulkan", skip_llm: bool = False,
-              whisper: bool = False) -> int:
+              whisper: bool = False, whispercpp: bool = False) -> int:
     models.mkdir(parents=True, exist_ok=True)
     print(f"models directory: {models.resolve()}")
     for asset in SPEECH_ASSETS + (WHISPER_ASSETS if whisper else []):
         download(asset, models, mirror)
+    if whispercpp:
+        if platform.system() != "Windows":
+            print("note: the whisper.cpp runtime is built for Windows only; skipped.")
+        else:
+            download(WHISPERCPP_MODEL, models, mirror)
+            install_whispercpp(models, mirror)
     if not skip_llm:
         download(LLM_ASSET, models, mirror)
         install_llama(models, mirror, gpu)

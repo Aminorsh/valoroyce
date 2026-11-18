@@ -53,6 +53,74 @@ def nvidia_gpu() -> Gpu | None:
         return None
 
 
+@dataclass
+class Card:
+    name: str
+    vendor: str      # "nvidia", "amd", "intel" or "other"
+    memory_mb: int   # the card's own memory; integrated graphics have little or none
+
+
+VENDORS = {0x10DE: "nvidia", 0x1002: "amd", 0x1022: "amd", 0x8086: "intel"}
+
+
+@functools.lru_cache(maxsize=1)
+def graphics_cards() -> tuple[Card, ...]:
+    """Every graphics adapter Windows knows, as DirectX lists them (no driver
+    tool needed, any maker). Empty elsewhere or when the list cannot be read."""
+    if sys.platform != "win32":
+        return ()
+    import ctypes
+    from ctypes import POINTER, WINFUNCTYPE, byref, c_uint, c_void_p
+
+    class Desc(ctypes.Structure):
+        _fields_ = [("Description", ctypes.c_wchar * 128), ("VendorId", c_uint), ("DeviceId", c_uint),
+                    ("SubSysId", c_uint), ("Revision", c_uint), ("DedicatedVideoMemory", ctypes.c_size_t),
+                    ("DedicatedSystemMemory", ctypes.c_size_t), ("SharedSystemMemory", ctypes.c_size_t),
+                    ("LuidLow", c_uint), ("LuidHigh", ctypes.c_long), ("Flags", c_uint)]
+
+    def call(obj, index, *args, argtypes=()):
+        fn = WINFUNCTYPE(ctypes.c_long, c_void_p, *argtypes)(ctypes.cast(obj, POINTER(POINTER(c_void_p)))[0][index])
+        return fn(obj, *args)
+
+    import uuid
+
+    iid = (ctypes.c_byte * 16).from_buffer_copy(uuid.UUID("770aae78-f26f-4dba-a829-253c83d1b387").bytes_le)
+    factory, cards = c_void_p(), []
+    try:
+        dxgi = ctypes.WinDLL("dxgi")
+        if dxgi.CreateDXGIFactory1(byref(iid), byref(factory)) < 0:
+            return ()
+        i = 0
+        while True:
+            adapter = c_void_p()
+            if call(factory, 12, c_uint(i), byref(adapter), argtypes=(c_uint, POINTER(c_void_p))) < 0:
+                break  # DXGI_ERROR_NOT_FOUND: no more adapters
+            desc = Desc()
+            if call(adapter, 10, byref(desc), argtypes=(POINTER(Desc),)) >= 0 and not desc.Flags & 2:
+                cards.append(Card(desc.Description, VENDORS.get(desc.VendorId, "other"),
+                                  desc.DedicatedVideoMemory // (1 << 20)))
+            call(adapter, 2)  # Release
+            i += 1
+    except OSError:
+        return ()
+    finally:
+        if factory:
+            call(factory, 2)
+    return tuple(cards)
+
+
+# Below this much memory of its own, a card is integrated graphics or too small
+# for Whisper beside the game.
+VULKAN_MIN_MB = 3000
+
+
+def vulkan_card() -> Card | None:
+    """The card whisper.cpp would use for Whisper on a PC without NVIDIA: the
+    one with the most memory of its own, if it has enough."""
+    cards = [c for c in graphics_cards() if c.memory_mb >= VULKAN_MIN_MB]
+    return max(cards, key=lambda c: c.memory_mb) if cards else None
+
+
 # -- files ----------------------------------------------------------------------
 
 
@@ -342,7 +410,7 @@ class _Vad(Item):
 class _SenseVoice(Item):
     id, role = "sensevoice", "asr"
     title = "SenseVoice Small"
-    summary = "在 CPU 上识别，不占显卡，哪台电脑都能跑。对真实的队内语音准确度差不少，适合没有 NVIDIA 显卡时使用，或作为后备。"
+    summary = "在 CPU 上识别，不占显卡，哪台电脑都能跑。对真实的队内语音准确度差不少，适合没有独立显卡时使用，或作为后备。"
     hardware = "任何电脑 · 不需要显卡"
     paths = ("sense-voice",)
 
@@ -392,6 +460,34 @@ class _Whisper(Item):
         return ""
 
 
+class _WhisperVulkan(Item):
+    id, role = "whispercpp", "asr"
+    title = "Whisper large-v3-turbo（Vulkan）"
+    summary = ("和上面的 Whisper 是同一个模型，换成 whisper.cpp 在显卡上运行：AMD、Intel 显卡也能用，"
+               "也不需要另装 1.3 GB 的运行库。")
+    hardware = "AMD / Intel / NVIDIA 独立显卡 · 占用约 1.2 GB 显存"
+    paths = ("whisper-ggml", setup.WHISPERCPP_DIR)
+
+    def assets(self):
+        return [setup.WHISPERCPP_MODEL]
+
+    def installed(self, models):
+        return super().installed(models) and setup.whispercpp_runtime_present(models)
+
+    def blocked(self):
+        if sys.platform != "win32":
+            return "目前只有 Windows 版"
+        return "" if vulkan_card() else f"这台电脑没有检测到显存 {VULKAN_MIN_MB // 1000} GB 以上的独立显卡"
+
+    def download_bytes(self, models):
+        runtime = 0 if setup.whispercpp_runtime_present(models) else setup.WHISPERCPP_RUNTIME.size
+        return super().download_bytes(models) + runtime
+
+    def install(self, models, mirror="auto", say=print, progress=None, cancel=None):
+        self._fetch(self.assets(), models, mirror, say, progress, cancel)
+        setup.install_whispercpp(models, mirror, say, progress, cancel)
+
+
 class _Translation(Item):
     id, role = "hy-mt2", "translate"
     title = "Hy-MT2 1.8B"
@@ -420,8 +516,9 @@ class _Translation(Item):
 
 
 VAD, SENSEVOICE, WHISPER, TRANSLATION = _Vad(), _SenseVoice(), _Whisper(), _Translation()
-ITEMS: dict[str, Item] = {i.id: i for i in (WHISPER, SENSEVOICE, TRANSLATION, VAD)}
-RECOGNIZERS = [WHISPER, SENSEVOICE]
+WHISPER_VULKAN = _WhisperVulkan()
+ITEMS: dict[str, Item] = {i.id: i for i in (WHISPER, WHISPER_VULKAN, SENSEVOICE, TRANSLATION, VAD)}
+RECOGNIZERS = [WHISPER, WHISPER_VULKAN, SENSEVOICE]
 
 # Below this much memory on the card, Whisper beside the game and the
 # translation model is a tight fit.
@@ -430,13 +527,23 @@ COMFORTABLE_MB = 6000
 
 def recommended() -> list[Item]:
     """What a new user should download for this PC."""
-    return [VAD, WHISPER if nvidia_gpu() else SENSEVOICE, TRANSLATION]
+    if nvidia_gpu():
+        asr = WHISPER
+    elif not WHISPER_VULKAN.blocked():
+        asr = WHISPER_VULKAN
+    else:
+        asr = SENSEVOICE
+    return [VAD, asr, TRANSLATION]
 
 
 def advice() -> str:
     """One line about this PC for the top of the models page."""
     gpu = nvidia_gpu()
     if gpu is None:
+        card = vulkan_card() if sys.platform == "win32" else None
+        if card:
+            return (f"显卡：{card.name} · {card.memory_mb / 1024:.0f} GB 显存。"
+                    "推荐用 Whisper（Vulkan）识别，翻译可以用显卡或 CPU。")
         return "未检测到 NVIDIA 显卡：语音识别用 SenseVoice（CPU），翻译可以用显卡或 CPU。"
     line = f"显卡：{gpu.name} · {gpu.memory_mb / 1024:.0f} GB 显存。推荐用 Whisper 识别。"
     if gpu.memory_mb < COMFORTABLE_MB:
