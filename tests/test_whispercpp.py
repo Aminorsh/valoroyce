@@ -99,7 +99,7 @@ _missing = whispercpp.unavailable(_cfg.models_path, _cfg.asr)
 
 @pytest.mark.skipif(bool(_missing), reason=f"whisper.cpp cannot run here: {_missing}")
 def test_real_server_recognises_japanese_and_english():
-    r = whispercpp.WhisperCppRecognizer(_cfg.models_path, _cfg.asr)
+    r = whispercpp.WhisperCppRecognizer(_cfg.models_path, _cfg.asr, port=8189)  # beside a running copy
     try:
         ja, _ = read_wav(str(_cfg.models_path / "sense-voice" / "test_wavs" / "ja.wav"))
         en, _ = read_wav(str(_cfg.models_path / "sense-voice" / "test_wavs" / "en.wav"))

@@ -35,9 +35,11 @@ _FULL_WIDTH = str.maketrans({",": "，", "?": "？", "!": "！", ";": "；", ":"
 
 
 def tidy(text: str, glossary=None) -> str:
-    """Chinese punctuation (Whisper writes ASCII commas), names by sound."""
+    """Chinese punctuation (Whisper writes ASCII commas), a lone letter as a
+    capital beside the Chinese ("a 包" -> "A包"), names by sound."""
     text = re.sub(r"(?<![0-9A-Za-z])[,?!;:]|[,?!;:](?![0-9A-Za-z])",
                   lambda m: m.group(0).translate(_FULL_WIDTH), text)
+    text = re.sub(r"\s*(?<![A-Za-z])([A-Za-z])(?![A-Za-z])\s*", lambda m: m.group(1).upper(), text)
     return glossary.spoken_zh(text) if glossary is not None else text
 
 

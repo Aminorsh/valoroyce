@@ -334,9 +334,11 @@ class Glossary:
             return text
         names = getattr(self, "_spoken_names", None)
         if names is None:
+            # Nicknames too (大狙 is said, not 冥驹): written as said, spelled
+            # out later by `outgoing`.
+            written = {zh for t in self.terms for zh in (t.zh, *t.zh_alias) if len(zh) >= 2 and _all_han(zh)}
             names = self._spoken_names = sorted(
-                ((tuple(lazy_pinyin(t.zh, style=Style.TONE3, neutral_tone_with_five=True)), t.zh)
-                 for t in self.terms if len(t.zh) >= 2 and _all_han(t.zh)),
+                ((tuple(lazy_pinyin(zh, style=Style.TONE3, neutral_tone_with_five=True)), zh) for zh in written),
                 key=lambda pair: -len(pair[0]))
         chars = list(text)
         readings = [set(r) if _all_han(c) else set()

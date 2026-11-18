@@ -89,7 +89,9 @@ class WhisperServer:
         server = server.resolve()
         self.url = f"http://{HOST}:{port}"
         self._open = urllib.request.build_opener(urllib.request.ProxyHandler({})).open
-        _port_free(HOST, port)
+        _port_free(HOST, port, "whisper-server.exe",
+                   f"If another program needs port {port}, please report it as an issue: "
+                   "this port cannot be changed yet.")
         self.log_path = models / f"whisper-server-{port}.log"
         self._log = open(self.log_path, "wb")
         cmd = [str(server), "-m", str((models / model).resolve()), "--host", HOST, "--port", str(port),
@@ -149,13 +151,13 @@ class WhisperCppRecognizer:
 
     id, name, label = "whispercpp", "Whisper (Vulkan graphics card)", "Whisper（Vulkan 显卡）"
 
-    def __init__(self, models: Path, cfg: AsrConfig):
+    def __init__(self, models: Path, cfg: AsrConfig, port: int = PORT):
         self.server = None
         self.languages = cfg.languages or ["ja"]
         problem = unavailable(models, cfg)
         if problem:
             raise RuntimeError(f"Whisper (Vulkan) cannot run: {problem}.")
-        self.server = WhisperServer(models, cfg.whispercpp_model)
+        self.server = WhisperServer(models, cfg.whispercpp_model, port=port)
         log = self.server.log()
         if "using Vulkan" not in log:
             self.close()

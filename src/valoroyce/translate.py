@@ -232,9 +232,11 @@ def find_gguf(models: Path, name: str = "") -> Path:
     return found[0]
 
 
-def _port_free(host: str, port: int) -> None:
+def _port_free(host: str, port: int, server: str = "llama-server.exe",
+               otherwise: str = "If another program needs that port, change [translate] base_url "
+                                "in config.toml.") -> None:
     """Fail with what to do when something already listens where our server
-    should. Otherwise our llama-server cannot start, or we would talk to a
+    should. Otherwise our server cannot start, or we would talk to a
     stranger."""
     import socket
 
@@ -243,9 +245,9 @@ def _port_free(host: str, port: int) -> None:
         if s.connect_ex((host, port)) != 0:
             return
     raise RuntimeError(
-        f"port {port} is already in use, probably by a llama-server.exe left running by an "
-        f"earlier start. End llama-server.exe in Task Manager (or restart the PC), then start "
-        f"again. If another program needs that port, change [translate] base_url in config.toml."
+        f"port {port} is already in use, probably by a {server} left running by an "
+        f"earlier start. End {server} in Task Manager (or restart the PC), then start "
+        f"again. {otherwise}"
     )
 
 

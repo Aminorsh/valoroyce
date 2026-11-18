@@ -174,3 +174,14 @@ def test_names_said_in_chinese_are_put_right_by_sound():
     # tones keep ordinary words apart; numbers keep their commas
     assert voice.tidy("我起了全甲,还有1,500", g) == "我起了全甲，还有1,500"
     assert voice.tidy("今天晚上我们去吃火锅吧。", g) == "今天晚上我们去吃火锅吧。"
+
+
+def test_nicknames_and_letters_as_said():
+    pytest.importorskip("pypinyin")
+    from valoroyce.glossary import Glossary
+
+    g = Glossary.load()
+    assert voice.tidy("中路大居", g) == "中路大狙"  # dà jū, a nickname of the Operator
+    assert voice.tidy("a 包 a 包", g) == "A包A包"
+    assert voice.tidy("对面两个人在 a 点我去 b 点", g) == "对面两个人在A点我去B点"
+    assert voice.tidy("Nice try, good game", g) == "Nice try， good game"  # words stay words
