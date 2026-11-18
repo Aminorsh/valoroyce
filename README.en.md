@@ -95,6 +95,7 @@ To type to your team: choose "发消息（中文 → 日语 / 英语）…" in t
 
 - Pick 日语 (Japanese) or English in the box; the choice is remembered.
 - Agents, weapons, maps and callouts are replaced with what the other language calls them. Chinese nicknames and shorthand are understood too (保安 → Cypher, 奶妈 → Sage, A大 → A main, 有大 → "has ult"). Captions always show the official names.
+- Common shorthand is written out before translating: A包 (spike down at A), A大两个 (two at A main), 中路一把狙 (a sniper mid), 中路暮蝶 (Clove mid).
 - The program only copies. It never types into the game or sends anything for you.
 - Machine translation does best with short, direct sentences. Jokes and slang tend to go wrong.
 

@@ -90,6 +90,10 @@ class Hit:
 _SITE = re.compile(r"(?<![A-Za-z])([A-Ca-c]) ?$")
 # "(有)大": the alias 大, valid only right after 有.
 _LEAD_IN = re.compile(r"\((.+)\)(.+)")
+# Where someone can be, as players write it (with or without a site letter).
+_PLACES = ["中路", "长廊", "短道", "小道", "高台", "高台下", "主道", "大道", "大厅", "连接", "窗口",
+           "匪家", "包点", "点", "区"]
+_CLAUSE_END = r"$|[\s，。,.！!？?、；;]"
 
 
 def _latin_pattern(spelling: str) -> re.Pattern[str]:
@@ -221,6 +225,48 @@ class Glossary:
 
     # -- the other direction: Chinese the player typed -> ja / en -------------
 
+    def shorthand(self, text: str) -> str:
+        """Callouts as players type or say them, written out in full so that a
+        small translation model gets them right:
+
+            A包 / B包了 / A点下包了   -> 爆能器已安放在A点
+            A点两个(人) / A大两个      -> A点有两个敌人 / A大有两个敌人
+            中路一把狙 / 对面有狙      -> 中路有一个狙击手 / 对面有一个狙击手
+            暮蝶在中                  -> 暮蝶在中路
+            中路暮蝶                  -> 暮蝶在中路
+
+        Nicknames (A大, 保安 ...) are spelled out afterwards, by `outgoing`.
+        """
+        rules = getattr(self, "_shorthand_rules", None)
+        if rules is None:
+            agents = sorted({zh for t in self.terms if t.kind == "agent" for zh in (t.zh, *t.zh_alias)
+                             if len(zh) >= 2}, key=len, reverse=True)
+            places = "|".join(map(re.escape, sorted(_PLACES, key=len, reverse=True)))
+            place = rf"(?:(?<![A-Za-z])[A-Ca-c] ?(?:{places}|大|小)?|{places})"
+            agent = "|".join(map(re.escape, agents))
+            weapon = "|".join(map(re.escape, sorted(
+                {zh for t in self.terms if t.kind == "weapon" for zh in (t.zh, *t.zh_alias)
+                 if len(zh) >= 2 and _all_han(zh)}, key=len, reverse=True)))
+            rules = self._shorthand_rules = [
+                # plant: the site letter, perhaps 点, perhaps 下, then 包; not 包点
+                (re.compile(r"(?<![A-Za-z])([A-Ca-c]) ?(?:点|包点)? ?(?:已经|已)?下?包了?(?!点)"),
+                 lambda m: f"爆能器已安放在{m.group(1).upper()}点"
+                           + ("，" if _all_han(m.string[m.end():m.end() + 1]) else "")),
+                # how many are there: a place, then a number of people
+                (re.compile(rf"({place}) ?有?([一两二三四五1-5])个人?(?!敌)(?={_CLAUSE_END})"),
+                 lambda m: f"{m.group(1)}有{m.group(2)}个敌人"),
+                (re.compile(r"(?:一把|有)狙(?![击])"), lambda m: "有一个狙击手"),
+                # a place, then a gun: "中路大狙" is "中路有大狙"
+                (re.compile(rf"({place}) ?({weapon})(?={_CLAUSE_END})"), lambda m: f"{m.group(1)}有{m.group(2)}"),
+                (re.compile(rf"在中(?={_CLAUSE_END})"), lambda m: "在中路"),
+                # a place, then who: "中路暮蝶" is "暮蝶在中路"
+                (re.compile(rf"(?:(?<=^)|(?<=[\s，。,！!？?、；;]))({place}) ?({agent})(?={_CLAUSE_END})"),
+                 lambda m: f"{m.group(2)}在{m.group(1)}"),
+            ] if agent and weapon else []
+        for pattern, write in rules:
+            text = pattern.sub(write, text)
+        return text
+
     def outgoing(self, text: str, lang: str) -> tuple[str, list[tuple[str, str]]]:
         """Prepare typed Chinese for translation into `lang`.
 
@@ -229,6 +275,7 @@ class Glossary:
         `lang`) pairs for the translator. Spelling shorthand out works better
         than hinting it: a model told that "大" means "ult" mostly ignores it.
         """
+        text = self.shorthand(text)
         written = [(zh, t) for t in self.terms for zh in (t.zh, *t.zh_alias)]
         found: list[tuple[int, int, Term, str]] = []  # replace [start, end) with term.zh
         folded = text.lower()  # same length as text: aliases like "AK" match "ak"

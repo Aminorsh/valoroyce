@@ -159,3 +159,33 @@ def test_outgoing_weapon_and_agent_nicknames(g):
     assert out(g, "ko闪一下，鸡妈妈守B点", "en")[0] == "K/O闪一下，奇乐守B包点"
     # Not inside a longer Latin word.
     assert out(g, "他很weak", "en") == ("他很weak", {})
+
+
+@pytest.mark.parametrize("said, written", [
+    ("A包", "爆能器已安放在A点"),
+    ("A 包", "爆能器已安放在A点"),
+    ("A点下包了", "爆能器已安放在A点"),
+    ("B包了快回防", "爆能器已安放在B点，快回防"),
+    ("A点两个人", "A点有两个敌人"),
+    ("A点两个", "A点有两个敌人"),
+    ("A大两个", "A大有两个敌人"),
+    ("中路三个", "中路有三个敌人"),
+    ("中路一把狙", "中路有一个狙击手"),
+    ("对面有狙", "对面有一个狙击手"),
+    ("中路大狙", "中路有大狙"),
+    ("暮蝶在中", "暮蝶在中路"),
+    ("中路暮蝶", "暮蝶在中路"),
+    # not shorthand: left as it is
+    ("我们两个人去A", "我们两个人去A"),
+    ("A包点有人", "A包点有人"),
+    ("下包了", "下包了"),
+    ("A点两个敌人", "A点两个敌人"),
+])
+def test_shorthand_callouts_are_written_out(said, written):
+    assert Glossary.load().shorthand(said) == written
+
+
+def test_written_out_shorthand_still_gets_its_names():
+    text, pairs = Glossary.load().outgoing("A大两个，中路大狙", "en")
+    assert text == "A主道有两个敌人，中路有冥驹"
+    assert ("A主道", "A main") in pairs and ("冥驹", "Operator") in pairs
