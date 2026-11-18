@@ -1,0 +1,81 @@
+name: whisper.cpp runtime
+
+# Speech recognition on graphics cards other than NVIDIA (AMD, Intel): whisper.cpp
+# built with Vulkan. Its own releases have no such Windows build, so it is built
+# here and kept as a pre-release of this repository, which the program fetches.
+# Runs when this file changes, or by hand.
+
+on:
+  workflow_dispatch:
+  push:
+    paths: [".github/workflows/whisper-runtime.yml"]
+
+env:
+  WHISPER_VERSION: v1.9.5
+  VULKAN_VERSION: 1.4.357.0
+
+jobs:
+  build:
+    runs-on: windows-latest
+    outputs:
+      name: ${{ steps.pack.outputs.name }}
+    steps:
+      - name: Vulkan SDK
+        run: |
+          curl.exe -o $env:RUNNER_TEMP/VulkanSDK-Installer.exe -L "https://sdk.lunarg.com/sdk/download/${env:VULKAN_VERSION}/windows/vulkansdk-windows-X64-${env:VULKAN_VERSION}.exe"
+          & "$env:RUNNER_TEMP\VulkanSDK-Installer.exe" --accept-licenses --default-answer --confirm-command install
+          Add-Content $env:GITHUB_ENV "VULKAN_SDK=C:\VulkanSDK\${env:VULKAN_VERSION}"
+          Add-Content $env:GITHUB_PATH "C:\VulkanSDK\${env:VULKAN_VERSION}\bin"
+      - name: whisper.cpp source
+        run: git clone --depth 1 --branch $env:WHISPER_VERSION https://github.com/ggml-org/whisper.cpp src
+      - name: Build
+        # Not tuned to the build machine's processor (GGML_NATIVE off); AVX2 is
+        # in every processor of the last ten years. The graphics card does the
+        # heavy work anyway.
+        run: |
+          cmake -S src -B build -DGGML_VULKAN=ON -DGGML_NATIVE=OFF -DGGML_AVX=ON -DGGML_AVX2=ON -DGGML_FMA=ON -DGGML_F16C=ON -DWHISPER_BUILD_TESTS=OFF -DWHISPER_BUILD_EXAMPLES=ON -DWHISPER_BUILD_SERVER=ON -DWHISPER_SDL2=OFF
+          cmake --build build --config Release -j 4 --target whisper-server whisper-cli
+      - name: Pack
+        id: pack
+        run: |
+          $name = "whisper-${env:WHISPER_VERSION}-bin-win-vulkan-x64"
+          New-Item -ItemType Directory $name | Out-Null
+          Copy-Item build\bin\Release\*.exe, build\bin\Release\*.dll $name
+          Copy-Item src\LICENSE "$name\LICENSE-whisper.cpp.txt"
+          Get-ChildItem $name | Format-Table Name, Length
+          7z a "$name.zip" ".\$name\*"
+          "sha256 " + (Get-FileHash "$name.zip").Hash.ToLower() + "  size " + (Get-Item "$name.zip").Length
+          Add-Content $env:GITHUB_OUTPUT "name=$name"
+      - name: The programs start
+        # No graphics card here: only checks that every library is found.
+        run: |
+          $name = "${{ steps.pack.outputs.name }}"
+          & ".\$name\whisper-server.exe" --help | Select-Object -First 3
+          if ($LASTEXITCODE -ne 0) { throw "whisper-server did not start ($LASTEXITCODE)" }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: whisper-runtime
+          path: ${{ steps.pack.outputs.name }}.zip
+          retention-days: 30
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: whisper-runtime
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          tag="whisper.cpp-${WHISPER_VERSION}-vulkan"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" ./*.zip --clobber
+          else
+            gh release create "$tag" ./*.zip --prerelease --target "$GITHUB_SHA" --title "whisper.cpp ${WHISPER_VERSION}, Vulkan, Windows x64" \
+              --notes "Runtime for speech recognition on AMD and Intel graphics cards, fetched by Valoroyce. Built from ggml-org/whisper.cpp ${WHISPER_VERSION} (MIT licence) by .github/workflows/whisper-runtime.yml; not a release of Valoroyce."
+          fi
+          sha256sum ./*.zip
