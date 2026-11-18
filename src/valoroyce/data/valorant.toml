@@ -28,11 +28,11 @@ terms = [
   { zh = "零", kind = "agent", en = ["Cypher"], ja = ["サイファー"], zh_alias = ["保安"] },
   { zh = "猎枭", kind = "agent", en = ["Sova"], ja = ["ソーヴァ"] },
   { zh = "贤者", kind = "agent", en = ["Sage"], ja = ["セージ"], zh_alias = ["奶妈"] },
-  { zh = "不死鸟", kind = "agent", en = ["Phoenix"], ja = ["フェニックス"], zh_alias = ["火男"] },
+  { zh = "不死鸟", kind = "agent", en = ["Phoenix"], ja = ["フェニックス"], zh_alias = ["火男"], zh_heard = ["河南"] },
   { zh = "捷风", kind = "agent", en = ["Jett"], ja = ["ジェット"], mishear = ["Jet"], zh_alias = ["捷提", "捷踢"] },
   { zh = "芮娜", kind = "agent", en = ["Reyna"], ja = ["レイナ"], mishear = ["Reina", "Rayna"] },
   { zh = "雷兹", kind = "agent", en = ["Raze"], ja = ["レイズ"] },
-  { zh = "铁臂", kind = "agent", en = ["Breach"], ja = ["ブリーチ"] },
+  { zh = "铁臂", kind = "agent", en = ["Breach"], ja = ["ブリーチ"], zh_heard = ["铁笔", "铁壁", "铁币"] },
   { zh = "斯凯", kind = "agent", en = ["Skye"], ja = ["スカイ"] },
   { zh = "夜露", kind = "agent", en = ["Yoru"], ja = ["ヨル"] },
   { zh = "星礈", kind = "agent", en = ["Astra"], ja = ["アストラ"] },
@@ -50,7 +50,7 @@ terms = [
   { zh = "幻棱", kind = "agent", en = ["Waylay"], ja = ["ウェイレイ"] },
   { zh = "禁灭", kind = "agent", en = ["Veto"], ja = ["ヴィトー"] },
   { zh = "迷核", kind = "agent", en = ["Miks"], ja = ["ミクス"] },
-  { zh = "遐思", kind = "agent", en = ["Hush"], ja = ["ハッシュ"] },  # ja unverified
+  { zh = "遐思", kind = "agent", en = ["Hush"], ja = ["ハッシュ"], zh_heard = ["瑕疵"] },  # ja unverified
 
   # ---- weapons ------------------------------------------------------------
   { zh = "标配", kind = "weapon", en = ["Classic"], ja = ["クラシック"] },
@@ -69,7 +69,7 @@ terms = [
   { zh = "狂徒", kind = "weapon", en = ["Vandal"], ja = ["ヴァンダル"], zh_alias = ["AK"] },
   { zh = "飞将", kind = "weapon", en = ["Marshal"], ja = ["マーシャル"], mishear = ["Marshall"], zh_alias = ["鸟狙"] },
   { zh = "莽侠", kind = "weapon", en = ["Outlaw"], ja = ["アウトロー"] },
-  { zh = "冥驹", kind = "weapon", en = ["Operator", "OP"], ja = ["オペレーター", "オペ"], zh_alias = ["大狙", "冥狙"] },
+  { zh = "冥驹", kind = "weapon", en = ["Operator", "OP"], ja = ["オペレーター", "オペ"], zh_alias = ["大狙", "冥狙"], zh_heard = ["大局", "大区", "大军"] },
   { zh = "战神", kind = "weapon", en = ["Ares"], ja = ["アレス"] },
   { zh = "奥丁", kind = "weapon", en = ["Odin"], ja = ["オーディン"] },
 
@@ -102,7 +102,7 @@ terms = [
   { zh = "回防", kind = "callout", en = ["retake"], ja = ["リテイク"] },
   { zh = "转点", kind = "callout", en = ["rotate"], ja = ["ローテ", "ローテート"] },
   { zh = "一波冲", kind = "callout", en = ["rush"], ja = ["ラッシュ"] },
-  { zh = "残血", kind = "callout", en = ["low", "one shot"], ja = ["ロー", "ワンショット", "ミリ"], zh_alias = ["大残"] },
+  { zh = "残血", kind = "callout", en = ["low", "one shot"], ja = ["ロー", "ワンショット", "ミリ"], zh_alias = ["大残"], zh_heard = ["大肠", "大餐"] },
   { zh = "半血", kind = "callout", en = ["half"], ja = ["ハーフ"] },
   { zh = "经济局", kind = "callout", en = ["eco"], ja = ["エコ"] },
   { zh = "保枪", kind = "callout", en = ["save"], ja = ["セーブ"] },
@@ -147,7 +147,7 @@ terms = [
   # Gear and ways of shooting, in the words Chinese players use.
   { zh = "刀", kind = "callout", en = ["knife"], ja = ["ナイフ"] },
   { zh = "半甲", kind = "callout", en = ["light armor", "light shield"], ja = ["ライトアーマー", "ライトシールド"], zh_alias = ["小甲"] },
-  { zh = "全甲", kind = "callout", en = ["heavy armor", "heavy shield", "full armor"], ja = ["ヘビーアーマー", "ヘビーシールド"], zh_alias = ["大甲"] },
+  { zh = "全甲", kind = "callout", en = ["heavy armor", "heavy shield", "full armor"], ja = ["ヘビーアーマー", "ヘビーシールド"], zh_alias = ["大甲"], zh_heard = ["全价"] },
   { zh = "跑打", kind = "callout", en = ["run and gun", "running and gunning"], ja = ["走り撃ち"] },
   { zh = "混烟", kind = "callout", en = ["spam through smoke", "smoke spam"], ja = ["モク抜き"] },
   { zh = "一枪头", kind = "callout", en = ["one tap"], ja = ["ワンタップ"] },

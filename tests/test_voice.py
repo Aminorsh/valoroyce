@@ -185,3 +185,50 @@ def test_nicknames_and_letters_as_said():
     assert voice.tidy("a 包 a 包", g) == "A包A包"
     assert voice.tidy("对面两个人在 a 点我去 b 点", g) == "对面两个人在A点我去B点"
     assert voice.tidy("Nice try, good game", g) == "Nice try， good game"  # words stay words
+
+
+# What recognisers wrote for a player's own recorded callouts, and what he said.
+HEARD = [
+    ("火南等会给我打个闪呗", "火男等会给我打个闪呗"),    # tones dropped
+    ("杰峰发一把呗，下把还你", "捷风发一把呗，下把还你"),
+    ("黑蒙前点能给个狗吗", "黑梦前点能给个狗吗"),
+    ("你把枪退了起全架吧", "你把枪退了起全甲吧"),
+    ("中路大局", "中路大狙"),                          # words a recogniser wrote
+    ("瑕疵大肠", "遐思大残"),
+    ("河南等会给我打个闪呗", "火男等会给我打个闪呗"),
+    ("必保", "B包"),                                   # a site letter heard as a character
+    ("一绝在逼大", "壹决在B大"),
+    ("B 宝", "B包"),
+]
+
+
+@pytest.mark.parametrize("raw, said", HEARD)
+def test_callouts_as_recognisers_wrote_them(raw, said):
+    pytest.importorskip("pypinyin")
+    from valoroyce.glossary import Glossary
+
+    assert voice.tidy(raw, Glossary.load()) == said
+
+
+# Everyday sentences that sound, here and there, like a name or a callout.
+EVERYDAY = [
+    "我刚刚说的你听到了吗",        # 刚说 ~ 钢锁
+    "比大小谁输谁请客",            # 比大 ~ B大
+    "西点军校的那个视频你看了吗",  # 西点 ~ C点
+    "爱打不打，随便你",            # 爱打 ~ A大
+    "背包里有什么东西",
+    "大家好，今天一起打几把",      # 大家 ~ 大甲
+    "你打听一下他们什么时候上线",  # 打听 ~ 大厅
+    "这把好强啊，对面太猛了",      # 好强 ~ 好枪
+    "被大招打死了，没办法",
+    "对面奶妈起了奥丁",            # 起了 ~ 奇乐
+    "我们下次再一起玩吧",
+]
+
+
+@pytest.mark.parametrize("sentence", EVERYDAY)
+def test_everyday_sentences_are_left_alone(sentence):
+    pytest.importorskip("pypinyin")
+    from valoroyce.glossary import Glossary
+
+    assert voice.tidy(sentence, Glossary.load()) == sentence
