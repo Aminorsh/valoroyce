@@ -114,6 +114,10 @@ def graphics_cards() -> tuple[Card, ...]:
 VULKAN_MIN_MB = 3000
 
 
+def _windows() -> bool:
+    return sys.platform == "win32"
+
+
 def vulkan_card() -> Card | None:
     """The card whisper.cpp would use for Whisper on a PC without NVIDIA: the
     one with the most memory of its own, if it has enough."""
@@ -420,8 +424,9 @@ class _SenseVoice(Item):
 
 class _Whisper(Item):
     id, role = "whisper", "asr"
-    title = "Whisper large-v3-turbo"
-    summary = "在显卡上识别，准确度明显更高，英雄名、报点和嘈杂的对局里都更稳。除了模型，还要安装一套约 1.3 GB 的显卡运行库。"
+    title = "Whisper large-v3-turbo（NVIDIA 专用版）"
+    summary = ("和上面的 Whisper 是同一个模型，换成 faster-whisper 运行：只支持 NVIDIA 显卡，还要另装约 1.3 GB "
+               "的显卡运行库。准确度和速度与上面的相当，一般用不到它。")
     hardware = "需要 NVIDIA 显卡 · 占用约 1.3 GB 显存"
     paths = (setup.WHISPER_DIR,)
 
@@ -462,10 +467,10 @@ class _Whisper(Item):
 
 class _WhisperVulkan(Item):
     id, role = "whispercpp", "asr"
-    title = "Whisper large-v3-turbo（Vulkan）"
-    summary = ("和上面的 Whisper 是同一个模型，换成 whisper.cpp 在显卡上运行：AMD、Intel 显卡也能用，"
-               "也不需要另装 1.3 GB 的运行库。")
-    hardware = "AMD / Intel / NVIDIA 独立显卡 · 占用约 1.2 GB 显存"
+    title = "Whisper large-v3-turbo"
+    summary = ("在显卡上识别，准确度明显更高，英雄名、报点和嘈杂的对局里都更稳。"
+               "用 whisper.cpp（Vulkan）运行，NVIDIA、AMD、Intel 独立显卡都能用。")
+    hardware = "独立显卡（NVIDIA / AMD / Intel）· 占用约 1.2 GB 显存"
     paths = ("whisper-ggml", setup.WHISPERCPP_DIR)
 
     def assets(self):
@@ -475,7 +480,7 @@ class _WhisperVulkan(Item):
         return super().installed(models) and setup.whispercpp_runtime_present(models)
 
     def blocked(self):
-        if sys.platform != "win32":
+        if not _windows():
             return "目前只有 Windows 版"
         return "" if vulkan_card() else f"这台电脑没有检测到显存 {VULKAN_MIN_MB // 1000} GB 以上的独立显卡"
 
@@ -518,7 +523,7 @@ class _Translation(Item):
 VAD, SENSEVOICE, WHISPER, TRANSLATION = _Vad(), _SenseVoice(), _Whisper(), _Translation()
 WHISPER_VULKAN = _WhisperVulkan()
 ITEMS: dict[str, Item] = {i.id: i for i in (WHISPER, WHISPER_VULKAN, SENSEVOICE, TRANSLATION, VAD)}
-RECOGNIZERS = [WHISPER, WHISPER_VULKAN, SENSEVOICE]
+RECOGNIZERS = [WHISPER_VULKAN, WHISPER, SENSEVOICE]
 
 # Below this much memory on the card, Whisper beside the game and the
 # translation model is a tight fit.
@@ -527,10 +532,10 @@ COMFORTABLE_MB = 6000
 
 def recommended() -> list[Item]:
     """What a new user should download for this PC."""
-    if nvidia_gpu():
-        asr = WHISPER
-    elif not WHISPER_VULKAN.blocked():
+    if not WHISPER_VULKAN.blocked():
         asr = WHISPER_VULKAN
+    elif nvidia_gpu():  # too little memory for the Vulkan check, or not Windows
+        asr = WHISPER
     else:
         asr = SENSEVOICE
     return [VAD, asr, TRANSLATION]
@@ -538,15 +543,11 @@ def recommended() -> list[Item]:
 
 def advice() -> str:
     """One line about this PC for the top of the models page."""
-    gpu = nvidia_gpu()
-    if gpu is None:
-        card = vulkan_card() if sys.platform == "win32" else None
-        if card:
-            return (f"显卡：{card.name} · {card.memory_mb / 1024:.0f} GB 显存。"
-                    "推荐用 Whisper（Vulkan）识别，翻译可以用显卡或 CPU。")
-        return "未检测到 NVIDIA 显卡：语音识别用 SenseVoice（CPU），翻译可以用显卡或 CPU。"
-    line = f"显卡：{gpu.name} · {gpu.memory_mb / 1024:.0f} GB 显存。推荐用 Whisper 识别。"
-    if gpu.memory_mb < COMFORTABLE_MB:
+    card = (vulkan_card() if _windows() else None) or nvidia_gpu()
+    if card is None:
+        return "未检测到独立显卡：语音识别用 SenseVoice（CPU），翻译可以用显卡或 CPU。"
+    line = f"显卡：{card.name} · {card.memory_mb / 1024:.0f} GB 显存。推荐用 Whisper 识别。"
+    if card.memory_mb < COMFORTABLE_MB:
         line += "显存不到 6 GB，和游戏一起用可能吃紧：游戏卡顿时把「翻译」改到 CPU。"
     return line
 

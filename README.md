@@ -21,7 +21,7 @@
 ## 需要什么
 
 - Windows 10 / 11（Linux、macOS 也能跑，主要用于开发）
-- 有**独立显卡**最好：语音识别用 Whisper，准确得多（约占 1.2 到 1.3 GB 显存），翻译模型也更快。NVIDIA 显卡用 faster-whisper；AMD、Intel 显卡（显存 3 GB 以上）用 whisper.cpp 的 Vulkan 版，同一个模型，在完整的一局对局录音上两者准确度相当。没有独立显卡也能用：识别改用 CPU 上的 SenseVoice，准确度差不少
+- 有**独立显卡**最好：语音识别用 Whisper，准确得多（约占 1.2 GB 显存），翻译模型也更快。NVIDIA、AMD、Intel 的独立显卡（显存 3 GB 以上）都可以：Whisper 用 whisper.cpp 的 Vulkan 版运行。没有独立显卡也能用：识别改用 CPU 上的 SenseVoice，准确度差不少
 - 磁盘空间：N 卡配置约 6 GB，其他约 1.5 GB
 - 游戏显示模式设为 **「窗口全屏」**。独占全屏下任何悬浮窗都显示不出来
 
@@ -31,8 +31,8 @@
 
 - 安装程序没有数字签名，Windows 可能提示「Windows 已保护你的电脑」：点「更多信息」，再点「仍要运行」。
 - 不需要管理员权限。默认装在 `%LOCALAPPDATA%\Programs\Valoroyce`，也可以选别的文件夹。
-- 安装时选择要下载的模型：有 NVIDIA 显卡选 Whisper，AMD / Intel 独立显卡选 Whisper 的 Vulkan 版，都没有就选 SenseVoice，再加翻译模型 Hy-MT2。也可以都不选，以后在设置窗口里随时下载。
-- 第一次启动先下载运行组件（约 115 MB），窗口里有进度条、速度和剩余时间。之后程序打开，开始下载你选的模型（N 卡约 4 GB，其他约 1.4 GB），自动选最快的下载源。下载完字幕自动启动，之后可以离线使用。下载可以中途取消，下次接着下。
+- 安装时选择要下载的模型：有独立显卡选 Whisper，没有就选 SenseVoice，再加翻译模型 Hy-MT2。（NVIDIA 专用版的 Whisper 是同一个模型的 faster-whisper 版本，一般不需要。）也可以都不选，以后在设置窗口里随时下载。
+- 第一次启动先下载运行组件（约 115 MB），窗口里有进度条、速度和剩余时间。之后程序打开，开始下载你选的模型（有独立显卡约 2.3 GB，没有约 1.4 GB），自动选最快的下载源。下载完字幕自动启动，之后可以离线使用。下载可以中途取消，下次接着下。
 - **更新**：下载新版安装程序直接安装。它会先关掉正在运行的 Valoroyce，模型和设置都会保留。
 - **卸载**：Windows 设置 → 应用 → 「Valoroyce 实时字幕」。卸载时会问要不要同时删除模型、设置和录音。
 - 出问题时，安装文件夹里的 `valoroyce.log` 记录了程序的输出，提 issue 时请附上。
@@ -51,8 +51,8 @@
 手动方式（任何系统）：
 
 ```sh
-uv sync --extra app        # 安装依赖；要用 Whisper 再加 --extra whisper（约 1.3 GB 的显卡运行库）
-uv run valoroyce setup     # 下载模型和 llama.cpp；加 --whisper 同时下载 Whisper 模型，AMD / Intel 显卡加 --whispercpp
+uv sync --extra app        # 安装依赖；NVIDIA 专用版 Whisper 再加 --extra whisper（约 1.3 GB 的显卡运行库）
+uv run valoroyce setup     # 下载模型和 llama.cpp；加 --whispercpp 同时下载 Whisper（任何独立显卡，Windows），--whisper 下载 NVIDIA 专用版
 uv run valoroyce           # 启动（缺模型时会打开设置窗口）
 ```
 
@@ -140,7 +140,7 @@ model_file = "Qwen3.5-4B-Q4_K_M.gguf"
 
 ### 显卡还是 CPU？
 
-翻译模型默认放在显卡上跑，出字幕更快，但它会和游戏共用显卡（约占 1.5 GB 显存；用 Whisper 识别时再加约 1.3 GB）。如果开着字幕时游戏掉帧或卡顿，在托盘菜单或设置窗口的「翻译」页把翻译切到 **CPU** 即可；CPU 模式下短句定稿大约 1 秒。显存只有 4 GB 的显卡建议一开始就这样设置。
+翻译模型默认放在显卡上跑，出字幕更快，但它会和游戏共用显卡（约占 1.5 GB 显存；用 Whisper 识别时再加约 1.2 GB）。如果开着字幕时游戏掉帧或卡顿，在托盘菜单或设置窗口的「翻译」页把翻译切到 **CPU** 即可；CPU 模式下短句定稿大约 1 秒。显存只有 4 GB 的显卡建议一开始就这样设置。
 
 ## 只翻译队友语音（强烈建议）
 

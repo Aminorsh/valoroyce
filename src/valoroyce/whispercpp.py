@@ -1,9 +1,10 @@
 """Whisper through whisper.cpp built with Vulkan: graphics cards of any maker.
 
-The NVIDIA-only path (faster-whisper) stays the first choice where it runs.
-This one serves AMD and Intel cards: whisper.cpp's `whisper-server` runs as a
-child process, as llama-server does for translation, and gets each utterance
-over HTTP on the loopback address.
+The first choice for every card, NVIDIA included: as accurate and as fast as
+faster-whisper on a whole recorded match, without its 1.3 GB of NVIDIA
+libraries. whisper.cpp's `whisper-server` runs as a child process, as
+llama-server does for translation, and gets each utterance over HTTP on the
+loopback address.
 """
 
 from __future__ import annotations

@@ -25,8 +25,8 @@ The target language is Chinese because that is who the project was built for. Th
 ## Requirements
 
 - Windows 10 / 11. Linux and macOS run it too, mainly for development.
-- A **graphics card of its own** is best: speech is then recognised with Whisper, which is far more accurate (about 1.2 to 1.3 GB of VRAM), and translation is faster too. NVIDIA cards run it through faster-whisper; AMD and Intel cards (3 GB of VRAM or more) through whisper.cpp with Vulkan, the same model, equally accurate on a whole recorded match. Without such a card it still works: recognition falls back to SenseVoice on the CPU, which is clearly less accurate.
-- Disk space: about 6 GB with an NVIDIA card, about 2.5 GB with AMD or Intel, about 1.5 GB otherwise.
+- A **graphics card of its own** is best: speech is then recognised with Whisper, which is far more accurate (about 1.2 GB of VRAM), and translation is faster too. NVIDIA, AMD and Intel cards with 3 GB of VRAM or more all work: Whisper runs through whisper.cpp with Vulkan. Without such a card it still works: recognition falls back to SenseVoice on the CPU, which is clearly less accurate.
+- Disk space: about 2.5 GB with a graphics card, about 1.5 GB otherwise.
 - The game set to **Windowed Fullscreen**. In exclusive fullscreen no overlay window can be shown.
 
 ## Install
@@ -35,8 +35,8 @@ The target language is Chinese because that is who the project was built for. Th
 
 - The installer is not signed, so Windows may say "Windows protected your PC": click "More info", then "Run anyway".
 - No administrator rights are needed. It installs to `%LOCALAPPDATA%\Programs\Valoroyce` unless you pick another folder.
-- The installer asks which models to download: Whisper with an NVIDIA card, Whisper's Vulkan version with an AMD or Intel card, SenseVoice without either, plus the translation model Hy-MT2. You may tick none and download them later from the settings window.
-- The first start downloads the runtime (about 115 MB) in a window with a progress bar, speed and time left. Then the program opens and fetches the models you picked (about 4 GB with an NVIDIA card, about 1.4 GB otherwise), from whichever source is fastest. Captions start by themselves when that is done, and from then on it works offline. Downloads can be cancelled and continued later.
+- The installer asks which models to download: Whisper with a graphics card of its own, SenseVoice without one, plus the translation model Hy-MT2. (The NVIDIA-only Whisper is the same model through faster-whisper; rarely needed.) You may tick none and download them later from the settings window.
+- The first start downloads the runtime (about 115 MB) in a window with a progress bar, speed and time left. Then the program opens and fetches the models you picked (about 2.3 GB with a graphics card, about 1.4 GB otherwise), from whichever source is fastest. Captions start by themselves when that is done, and from then on it works offline. Downloads can be cancelled and continued later.
 - **Updating**: run the newer installer. It closes a running Valoroyce first and keeps your models and settings.
 - **Uninstalling**: Windows Settings → Apps → "Valoroyce 实时字幕". It asks whether to delete the models, settings and recordings too.
 - If something goes wrong, `valoroyce.log` in the install folder holds the program's output. Please attach it to an issue.
@@ -55,8 +55,8 @@ From source (for development):
 By hand, on any system:
 
 ```sh
-uv sync --extra app        # install dependencies; add --extra whisper for Whisper (about 1.3 GB of GPU libraries)
-uv run valoroyce setup     # models and llama.cpp; add --whisper for the Whisper model, --whispercpp on AMD / Intel
+uv sync --extra app        # install dependencies; add --extra whisper for the NVIDIA-only Whisper (about 1.3 GB of GPU libraries)
+uv run valoroyce setup     # models and llama.cpp; add --whispercpp for Whisper (any graphics card, Windows), --whisper for the NVIDIA-only one
 uv run valoroyce           # start (opens the settings window if a model is missing)
 ```
 
@@ -144,7 +144,7 @@ The default caption model, Hy-MT2, is small, fast and fully offline, but casual 
 
 ### GPU or CPU?
 
-The translation model runs on the GPU by default, which gives faster captions but shares the card with the game (about 1.5 GB of VRAM, plus about 1.3 GB when Whisper recognises). If the game stutters with captions on, switch translation to the CPU in the tray menu ("翻译运行在") or on the 翻译 page of the settings window. On CPU, a short line is finalised in roughly a second. On a card with only 4 GB, start with this setting.
+The translation model runs on the GPU by default, which gives faster captions but shares the card with the game (about 1.5 GB of VRAM, plus about 1.2 GB when Whisper recognises). If the game stutters with captions on, switch translation to the CPU in the tray menu ("翻译运行在") or on the 翻译 page of the settings window. On CPU, a short line is finalised in roughly a second. On a card with only 4 GB, start with this setting.
 
 ## Caption only your teammates (strongly recommended)
 
@@ -264,7 +264,7 @@ Everything is in `src/valoroyce/`. Each stage lives in one file and knows nothin
 |---|---|
 | `audio.py` | Audio sources (loopback, one program or all but one, microphone, WAV file) yielding 16 kHz mono blocks; resampler |
 | `apploop.py` | Windows application loopback in plain ctypes: the sound of one program (or of all but one), the list of programs playing sound |
-| `speech.py` | Sentence splitting (Silero VAD) and the recognisers: Whisper on an NVIDIA card (faster-whisper), SenseVoice on the CPU (sherpa-onnx) |
+| `speech.py` | Sentence splitting (Silero VAD) and the recognisers: Whisper on NVIDIA cards only (faster-whisper), SenseVoice on the CPU (sherpa-onnx) |
 | `whispercpp.py` | Whisper on any graphics card: whisper.cpp's `whisper-server` (Vulkan build from this repository's CI) as a child process |
 | `listener.py` | What counts as finished speech and what is shown while someone is still talking |
 | `glossary.py` | Term handling: fix the transcript, list the terms in a sentence, enforce names in the output |

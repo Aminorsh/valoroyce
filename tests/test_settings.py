@@ -103,12 +103,18 @@ def test_what_is_missing_follows_the_settings(tmp_path, monkeypatch):
     for item in catalog.ITEMS.values():
         monkeypatch.setattr(type(item), "installed", lambda self, models: self.id in here)
     monkeypatch.setattr(catalog, "nvidia_gpu", lambda: catalog.Gpu("Some card", 8000))
+    monkeypatch.setattr(catalog, "_windows", lambda: True)
+    monkeypatch.setattr(catalog, "graphics_cards", lambda: (catalog.Card("Some card", "nvidia", 8000),))
     cfg = Config()
     cfg.models_dir = str(tmp_path)
-    assert [i.id for i in catalog.missing(cfg)] == ["vad", "whisper", "hy-mt2"]
-    assert [i.id for i in catalog.recommended()] == ["vad", "whisper", "hy-mt2"]
+    # NVIDIA too gets Whisper through whisper.cpp first
+    assert [i.id for i in catalog.missing(cfg)] == ["vad", "whispercpp", "hy-mt2"]
+    assert [i.id for i in catalog.recommended()] == ["vad", "whispercpp", "hy-mt2"]
+    here.add("whisper")  # an install from before: faster-whisper will do, nothing is missing
+    assert [i.id for i in catalog.missing(cfg)] == ["vad", "hy-mt2"]
+    here.discard("whisper")
     here.update({"vad", "sensevoice"})
-    assert [i.id for i in catalog.missing(cfg)] == ["hy-mt2"]  # the second recogniser will do
+    assert [i.id for i in catalog.missing(cfg)] == ["hy-mt2"]  # the last recogniser will do
     cfg.asr.order = ["whisper"]
     assert [i.id for i in catalog.missing(cfg)] == ["whisper", "hy-mt2"]
     cfg.translate.backend = "none"
@@ -283,6 +289,8 @@ def window(saved, tmp_path, monkeypatch):
 
     app = QApplication.instance() or QApplication([])
     monkeypatch.setattr(catalog, "nvidia_gpu", lambda: catalog.Gpu("Some card", 8000))
+    monkeypatch.setattr(catalog, "_windows", lambda: True)
+    monkeypatch.setattr(catalog, "graphics_cards", lambda: (catalog.Card("Some card", "nvidia", 8000),))
 
     class Host:
         busy, pipeline, recognizer, from_file = False, None, None, False
@@ -322,7 +330,7 @@ def test_a_change_in_the_window_is_applied_remembered_and_passed_on(window):
 def test_recognisers_can_be_reordered_and_switched_off_but_not_all(window):
     page, cfg = window.models, window.host.cfg
     whisper, sensevoice = catalog.WHISPER, catalog.SENSEVOICE
-    assert page.order() == ["whisper", "whispercpp", "sensevoice"]
+    assert page.order() == ["whispercpp", "whisper", "sensevoice"]
     page.toggle(catalog.WHISPER_VULKAN, False)
     assert page.order() == ["whisper", "sensevoice"]
     page.move(whisper, 1)
@@ -360,7 +368,7 @@ def test_the_first_start_offers_what_this_pc_needs(window):
     started = []
     page.start = lambda item: started.append(item.id)
     page.download_recommended()
-    assert started == ["vad", "whisper", "hy-mt2"]
+    assert started == ["vad", "whispercpp", "hy-mt2"]
 
 
 def test_a_finished_download_starts_captions_and_a_failed_one_says_why(window, monkeypatch):

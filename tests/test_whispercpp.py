@@ -70,7 +70,7 @@ def test_made_up_phrases_are_dropped():
 
 def test_amd_and_intel_cards_get_whisper_through_vulkan(monkeypatch):
     monkeypatch.setattr(catalog, "nvidia_gpu", lambda: None)
-    monkeypatch.setattr(catalog.sys, "platform", "win32")
+    monkeypatch.setattr(catalog, "_windows", lambda: True)
     monkeypatch.setattr(catalog, "graphics_cards",
                         lambda: (catalog.Card("Intel UHD", "intel", 128),
                                  catalog.Card("AMD Radeon RX 6750 XT", "amd", 12272)))
@@ -81,8 +81,16 @@ def test_amd_and_intel_cards_get_whisper_through_vulkan(monkeypatch):
     assert catalog.SENSEVOICE in catalog.recommended()
 
 
-def test_defaults_try_vulkan_between_the_two_others():
-    assert AsrConfig().order == ["whisper", "whispercpp", "sensevoice"]
+def test_nvidia_cards_get_it_first_too(monkeypatch):
+    assert AsrConfig().order == ["whispercpp", "whisper", "sensevoice"]
+    monkeypatch.setattr(catalog, "nvidia_gpu", lambda: catalog.Gpu("GeForce RTX 3050", 4096))
+    monkeypatch.setattr(catalog, "_windows", lambda: True)
+    monkeypatch.setattr(catalog, "graphics_cards", lambda: (catalog.Card("GeForce RTX 3050", "nvidia", 4096),))
+    assert catalog.recommended()[1] is catalog.WHISPER_VULKAN
+    assert "6 GB" in catalog.advice()  # tight beside the game: says what to do
+    # not Windows, or too small a card: faster-whisper is still offered to NVIDIA
+    monkeypatch.setattr(catalog, "graphics_cards", lambda: ())
+    assert catalog.recommended()[1] is catalog.WHISPER
 
 
 _cfg = Config()

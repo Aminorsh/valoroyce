@@ -156,10 +156,10 @@ begin
   Intro := AddText(ModelPage, 0, 0,
     '这里选的模型会在程序第一次打开时自动下载。不选也没关系：程序的「设置与模型」窗口里随时可以下载、关闭或删除任何一个。');
   Top := Intro.Top + Intro.Height + ScaleY(14);
-  Top := AddModel(0, Top, 'Whisper large-v3-turbo（约 2.9 GB）',
-    '语音识别，最准确。需要 NVIDIA 显卡，含显卡运行库。', HasNvidia);
-  Top := AddModel(3, Top, 'Whisper large-v3-turbo，Vulkan 版（约 890 MB）',
-    '同一个模型换成 whisper.cpp 运行：AMD、Intel 独立显卡也能用。', HasAmd and not HasNvidia);
+  Top := AddModel(3, Top, 'Whisper large-v3-turbo（约 890 MB）',
+    '语音识别，最准确。需要独立显卡：NVIDIA、AMD、Intel 都可以。', HasNvidia or HasAmd);
+  Top := AddModel(0, Top, 'Whisper large-v3-turbo，NVIDIA 专用版（约 2.9 GB）',
+    '同一个模型换成 faster-whisper 运行，含显卡运行库。一般不需要。', False);
   Top := AddModel(1, Top, 'SenseVoice Small（约 240 MB）',
     '语音识别，只用 CPU，任何电脑都能用。', not HasNvidia);
   Top := AddModel(2, Top, 'Hy-MT2 1.8B（约 1.2 GB）',

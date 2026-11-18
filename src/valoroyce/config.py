@@ -47,18 +47,19 @@ class VadConfig:
 @dataclass
 class AsrConfig:
     # Which recogniser listens.
-    #   "whisper"     Whisper on an NVIDIA graphics card: the accurate one. Needs
-    #                 its model (`valoroyce setup --whisper`) and about 1.3 GB
-    #                 of the card's memory.
-    #   "whispercpp"  the same Whisper through whisper.cpp (Vulkan): graphics
-    #                 cards of any maker, AMD and Intel included. Windows.
+    #   "whispercpp"  Whisper on the graphics card through whisper.cpp (Vulkan):
+    #                 the accurate one, on cards of any maker. Needs its model
+    #                 (`valoroyce setup --whispercpp`) and about 1.2 GB of the
+    #                 card's memory. Windows.
+    #   "whisper"     the same Whisper through faster-whisper: NVIDIA cards
+    #                 only, plus about 1.3 GB of libraries (`setup --whisper`).
     #   "sensevoice"  SenseVoice on the CPU: works everywhere, much less accurate
     #                 on real voice chat.
     #   "auto"        the first recogniser of `order` that can run here.
     backend: str = "auto"
     # backend = "auto": the recognisers to try, in this order. One that is left
     # out is never used, even if its model is downloaded.
-    order: list[str] = field(default_factory=lambda: ["whisper", "whispercpp", "sensevoice"])
+    order: list[str] = field(default_factory=lambda: ["whispercpp", "whisper", "sensevoice"])
     # Languages we expect, first = default. Speech detected as anything else is
     # recognised again as the likeliest of these.
     languages: list[str] = field(default_factory=lambda: ["ja", "en"])
