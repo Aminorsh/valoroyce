@@ -55,6 +55,11 @@ def compression_ratio(text: str) -> float:
     return len(data) / len(zlib.compress(data)) if data else 0.0
 
 
+def _bare(text: str) -> str:
+    """Letters and characters only: punctuation and spaces dropped."""
+    return "".join(c for c in text if c.isalnum())
+
+
 def _wav(samples: np.ndarray) -> bytes:
     pcm = (np.clip(samples, -1.0, 1.0) * 32767).astype("<i2").tobytes()
     out = io.BytesIO()
@@ -183,7 +188,8 @@ class WhisperCppRecognizer:
 
         lang = language or self.languages[0]
         ask_others = not language and len(self.languages) > 1
-        reply = self._ask(samples, lang, ask_others, prompt or LANGUAGE_PROMPT.get(language, ""))
+        prompt = prompt or LANGUAGE_PROMPT.get(language, "")
+        reply = self._ask(samples, lang, ask_others, prompt)
         likely = reply.get("language_probabilities") or {}
         if ask_others:
             other = max(self.languages[1:], key=lambda code: likely.get(code, 0.0))
@@ -196,6 +202,10 @@ class WhisperCppRecognizer:
             # (seen: the first byte of 。 alone); the server sends that as U+FFFD.
             text = (s.get("text") or "").replace("�", "").strip()
             if s.get("avg_logprob", 0.0) < MADE_UP_LOGPROB or compression_ratio(text) > MADE_UP_REPETITION:
+                continue
+            # Unclear audio can come back as the end of the prompt itself
+            # (seen: "无畏契约时说的。" for a mumbled callout).
+            if prompt and _bare(text) and _bare(text) in _bare(prompt):
                 continue
             if text and not _CREDITS.search(text):
                 pieces.append(Piece(text, float(s.get("start", 0.0)), float(s.get("end", 0.0))))

@@ -126,3 +126,11 @@ def test_every_local_server_has_a_port_of_its_own():
 def test_a_character_cut_in_half_is_dropped():
     reply = {"segments": [segment("别买枪�")]}
     assert recognizer({"zh": reply}).transcribe(np.zeros(SR, dtype=np.float32), language="zh").text == "别买枪"
+
+
+def test_the_prompt_coming_back_is_not_a_message():
+    prompt = "以下是普通话的句子，是在玩无畏契约时说的。"
+    rec = recognizer({"zh": {"segments": [segment("无畏契约时说的。")]}})
+    assert rec.transcribe(np.zeros(SR, dtype=np.float32), language="zh", prompt=prompt).text == ""
+    rec = recognizer({"zh": {"segments": [segment("中路大狙。")]}})
+    assert rec.transcribe(np.zeros(SR, dtype=np.float32), language="zh", prompt=prompt).text == "中路大狙。"
