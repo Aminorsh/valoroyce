@@ -12,6 +12,13 @@ source = "loopback"
 # Part of the device name, see `valoroyce devices`. Empty = system default.
 # 设备名的一部分；留空用系统默认设备
 device = ""
+# Listen to one program only, by its file name, e.g. "RiotClientServices.exe";
+# see `valoroyce devices`. Empty = every program. When set, `device` is not used.
+# 只听某一个程序的声音（填程序文件名）；留空 = 所有程序。设置后 device 不再起作用
+app = ""
+# "only" = just that program 只听它; "except" = everything but it, e.g. a
+# voice-call program 除了它以外的全部声音（例如排除语音通话软件）
+app_mode = "only"
 file = ""
 realtime = true
 

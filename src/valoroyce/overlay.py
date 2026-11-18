@@ -315,6 +315,16 @@ class Controller(QObject):
         """Rebuilt on every open: headsets get plugged in mid-session."""
         menu, current = self.devices, self.cfg.audio.device
         menu.clear()
+        if self.cfg.audio.app:  # one program is listened to: devices do not apply
+            from .apploop import label
+
+            what = label(self.cfg.audio.app)
+            menu.addAction(QAction(f"除 {what} 以外的全部程序" if self.cfg.audio.app_mode == "except"
+                                   else f"只听 {what}", menu, enabled=False))
+            change = QAction("在设置里更改…", menu)
+            change.triggered.connect(lambda _=False: self.open_settings("sound"))
+            menu.addAction(change)
+            return
         try:
             names = [name for kind, name, _ in list_devices() if kind == "loopback"]
         except Exception as e:

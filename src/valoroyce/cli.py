@@ -41,6 +41,10 @@ def cmd_run(args) -> int:
         cfg.audio.realtime = False
     if args.device is not None:
         cfg.audio.device = args.device
+    if args.app is not None:
+        cfg.audio.app, cfg.audio.app_mode = args.app, "only"
+    if args.except_app is not None:
+        cfg.audio.app, cfg.audio.app_mode = args.except_app, "except"
     if args.backend:  # an explicit choice on the command line: that model alone
         cfg.translate.backend, cfg.translate.custom.backend = args.backend, ""
     if args.cpu:
@@ -96,6 +100,19 @@ def cmd_devices(args) -> int:
     for kind, name, default in list_devices():
         print(f"{kind:9} {'*' if default else ' '} {name}")
     print('\n* = system default. Put part of a name in config.toml: [audio] device = "..."')
+    try:
+        from .apploop import playing, supported
+
+        apps = playing() if supported() else []
+    except OSError as e:
+        print(f"\ncannot list programs: {e}")
+        return 0
+    if apps:
+        print("\nPrograms with sound open (> = playing now):")
+        for name, now in apps:
+            print(f"  {'>' if now else ' '} {name}")
+        print('Listen to one of them only: [audio] app = "name.exe" (or run --app name.exe);\n'
+              'everything but it: app_mode = "except" (or run --except-app name.exe).')
     return 0
 
 
@@ -175,6 +192,8 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--file", help="caption a WAV file instead of live audio")
     r.add_argument("--fast", action="store_true", help="with --file: do not pace to real time")
     r.add_argument("--device", help="output/input device name (substring)")
+    r.add_argument("--app", help="listen to this program only, by file name (see `devices`)")
+    r.add_argument("--except-app", help="listen to everything except this program")
     r.add_argument("--backend", choices=["llama", "openai", "none"], help="translation backend")
     r.add_argument("--cpu", action="store_true", help="keep the translation model off the GPU")
     r.add_argument("--no-overlay", action="store_true", help="print captions to the console only")

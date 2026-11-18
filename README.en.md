@@ -83,7 +83,7 @@ A caption strip appears near the bottom of the screen, and a red speech-bubble i
 |---|---|
 | 模型 (models) | One card per model (and one for your own caption translation model): what it is for, the hardware it suits, its size and its state. **下载 / 取消 / 继续下载** (download, cancel, continue), **删除** (delete: frees the disk space, can be downloaded again any time), and untick **启用** (enabled) to keep the files but not use the model. Recognition models have ▲ ▼ to set the **order of use**: they are tried from the top and the first that can run is used. The download source is chosen at the top (fastest by test / mirrors in China / international) |
 | 字幕 (captions) | Font size, rows on screen, how long a caption stays, background opacity, width, original text on or off, dragging the strip |
-| 声音与识别 (sound and recognition) | Playback device to listen to (see "Caption only your teammates"), languages, captions while someone is still talking, the pause that ends a sentence |
+| 声音与识别 (sound and recognition) | Playback device to listen to (see "Caption only your teammates"), which programs to listen to (see "When you talk over a separate voice-call program"), languages, captions while someone is still talking, the pause that ends a sentence |
 | 翻译 (translation) | Translation model on the GPU or the CPU, whether half-sentences are translated; your own translation model (see "Captions on a translation model of your choice") |
 | 发消息 (messages) | Target language, shortcut, an online service instead of the local model (address, model name, API key) |
 
@@ -155,6 +155,12 @@ By default it hears **everything** the PC plays, so gunfire, ability sounds and 
    - With a single device, install a virtual sound card such as VB-CABLE, send voice chat to it, and in Windows sound settings enable "Listen to this device" on it so the audio also reaches your headset.
 2. Pick that device under "声音来源" in the tray menu or on the 声音与识别 page of the settings window. (Or put it in the config: `[audio] device = "CABLE"`. Part of the name is enough; `uv run valoroyce devices` lists the names.)
 
+## When you talk over a separate voice-call program
+
+If you and your friends chat in Chinese over QQ, KOOK, Discord or similar, that speech is recognised and translated too by default. On the 声音与识别 page of the settings window, set 听哪些程序 to 除一个程序以外的全部程序 (everything except one program) and pick the call program under 程序 (make it play a sound first, then press 刷新). The captions then ignore your chat. 只听一个程序 does the opposite. This is the same Windows feature as OBS's Application Audio Capture: no administrator rights, nothing changes in what you hear, and the game is not touched. It needs Windows 10 version 2004 or later. In the config: `[audio] app = "KOOK.exe"`, `app_mode = "except"`.
+
+Reports online say VALORANT's team voice is played by the Riot Client (`RiotClientServices.exe`), not by the game itself. If so, listening to that program alone leaves only your teammates, without gunfire or agent lines. This has not been checked in a match yet.
+
 ## Configuration
 
 The common options are all in the settings window; no file needs editing. To write the configuration by hand (or for options the window does not have), copy `config.example.toml` to `config.toml` and edit. Every key is optional. Note that a value changed in the settings window overrides `config.toml`. The ones people change most:
@@ -206,7 +212,7 @@ With 8 translation threads, short lines were finalised in about 0.65–0.7 s. Tr
 ## Commands
 
 ```sh
-uv run valoroyce devices                      # list audio devices
+uv run valoroyce devices                      # list audio devices and programs playing sound
 uv run valoroyce run --file some.wav          # caption a recording
 uv run valoroyce run --no-overlay             # no window; print captions to the terminal
 uv run valoroyce run --cpu                    # keep translation off the GPU for this run
@@ -256,7 +262,8 @@ Everything is in `src/valoroyce/`. Each stage lives in one file and knows nothin
 
 | File | Job |
 |---|---|
-| `audio.py` | Audio sources (loopback, microphone, WAV file) yielding 16 kHz mono blocks; resampler |
+| `audio.py` | Audio sources (loopback, one program or all but one, microphone, WAV file) yielding 16 kHz mono blocks; resampler |
+| `apploop.py` | Windows application loopback in plain ctypes: the sound of one program (or of all but one), the list of programs playing sound |
 | `speech.py` | Sentence splitting (Silero VAD) and the two recognisers: Whisper on an NVIDIA card (faster-whisper), SenseVoice on the CPU (sherpa-onnx) |
 | `listener.py` | What counts as finished speech and what is shown while someone is still talking |
 | `glossary.py` | Term handling: fix the transcript, list the terms in a sentence, enforce names in the output |

@@ -22,6 +22,12 @@ class AudioConfig:
     source: str = "loopback"
     # Case-insensitive substring of the device name. Empty = system default.
     device: str = ""
+    # With source = "loopback": listen to one program only, by its file name
+    # ("RiotClientServices.exe"), or to everything except it. Empty = every
+    # program on `device`. When set, `device` is not used.
+    app: str = ""
+    # "only": just `app`. "except": everything but `app` (a voice-call program).
+    app_mode: str = "only"
     # WAV path for source = "file".
     file: str = ""
     # Feed a file at real-time speed (True) or as fast as possible (False).

@@ -1,11 +1,12 @@
 """Audio sources. Each yields mono float32 blocks at 16 kHz.
 
 Nothing here touches the game: loopback capture asks Windows for a copy of what
-an output device is playing (the same mechanism OBS uses).
+an output device, or one program, is playing (the same mechanisms OBS uses).
 """
 
 from __future__ import annotations
 
+import os
 import queue
 import sys
 import threading
@@ -239,11 +240,101 @@ class DeviceSource:
             yield resampler.process(mono)
 
 
+class AppSource:
+    """Capture what one program plays, or everything except one program.
+
+    The program is named by its file name ("RiotClientServices.exe") and may
+    start, quit and start again while this runs: the list of processes is
+    looked at every few seconds. While a program to listen to is not running,
+    silence is handed out at the pace of the clock, so captions still end.
+    Windows itself delivers silence while the program is quiet.
+    """
+
+    RECHECK_SECONDS = 2.0
+
+    def __init__(self, app: str, exclude: bool = False):
+        from . import apploop
+
+        if not apploop.supported():
+            raise RuntimeError("只听某个程序的声音需要 Windows 10（2004 版）或更新的系统。"
+                               "请在「设置与模型」的「声音」页把「只听」改回「全部声音」。")
+        self.app, self.exclude = app, exclude
+        shown = apploop.label(app)
+        self.name = f"除 {shown} 以外的全部声音" if exclude else shown
+        self.target = 0  # process tree listened to (excluded); 0 = not running
+        self._stop = threading.Event()
+        self._blocks: queue.SimpleQueue = queue.SimpleQueue()
+        self._thread: threading.Thread | None = None
+
+    stop = DeviceSource.stop
+    join = DeviceSource.join
+    lag = DeviceSource.lag
+
+    def _capture(self) -> None:
+        from . import apploop
+
+        block = int(SAMPLE_RATE * BLOCK_SECONDS)
+        loop, pid, looked, clock = None, -1, float("-inf"), 0.0
+        held = np.zeros(0, dtype=np.float32)
+        try:
+            while not self._stop.is_set():
+                now = time.monotonic()
+                if now - looked >= self.RECHECK_SECONDS:
+                    looked = now
+                    found = apploop.pick_root(apploop.processes(), self.app)
+                    # Excluding a program that is not running: exclude ourselves,
+                    # which play nothing, so everything is heard.
+                    want = found or (os.getpid() if self.exclude else 0)
+                    if want != pid:
+                        if loop is not None:
+                            loop.close()
+                            loop = None
+                        pid, self.target, clock = want, found, now
+                        if pid:
+                            loop = apploop.Loopback(pid, self.exclude)
+                if loop is None:  # waiting for the program to start
+                    self._stop.wait(BLOCK_SECONDS)
+                    due = int((time.monotonic() - clock) / BLOCK_SECONDS)
+                    for _ in range(due):
+                        self._blocks.put(np.zeros(block, dtype=np.float32))
+                    clock += due * BLOCK_SECONDS
+                    continue
+                loop.wait(BLOCK_SECONDS)
+                pieces = [samples for samples, _position in loop.read()]
+                if pieces:
+                    held = np.concatenate([held, *pieces])
+                while len(held) >= block:
+                    self._blocks.put(held[:block])
+                    held = held[block:]
+        except BaseException as e:  # hand the failure to whoever is reading
+            self._blocks.put(e)
+        else:
+            self._blocks.put(None)
+        finally:
+            if loop is not None:
+                loop.close()
+
+    def __iter__(self) -> Iterator[np.ndarray]:
+        self._thread = threading.Thread(target=self._capture, name="capture", daemon=True)
+        self._thread.start()
+        while True:
+            data = self._blocks.get()
+            if data is None:
+                return
+            if isinstance(data, BaseException):
+                raise data
+            yield data
+
+
 def open_source(cfg: AudioConfig):
     if cfg.source == "file":
         if not cfg.file:
             raise ValueError("audio.source = 'file' needs audio.file")
         return FileSource(cfg.file, cfg.realtime)
+    if cfg.source == "loopback" and cfg.app:
+        if cfg.app_mode not in ("only", "except"):
+            raise ValueError(f"unknown audio.app_mode: {cfg.app_mode!r} (use \"only\" or \"except\")")
+        return AppSource(cfg.app, exclude=cfg.app_mode == "except")
     if cfg.source in ("loopback", "mic"):
         return DeviceSource(cfg.device, loopback=cfg.source == "loopback")
     raise ValueError(f"unknown audio.source: {cfg.source!r}")

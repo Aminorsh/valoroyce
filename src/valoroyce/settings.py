@@ -804,7 +804,6 @@ class SettingsWindow(QWidget):
 
         fill()
         devices.currentIndexChanged.connect(lambda _i: self.set("audio.device", devices.currentData()))
-        devices.setEnabled(not self.host.from_file)
         row = QHBoxLayout()
         row.addWidget(devices)
         row.addWidget(button("刷新", on_click=fill))
@@ -812,6 +811,7 @@ class SettingsWindow(QWidget):
         form.add("声音来源", row,
                  "默认听电脑播放的全部声音，枪声和英雄台词也会混进来。把游戏里的语音聊天单独输出到一个设备，"
                  "再在这里选中它，字幕就只跟队友的声音走。")
+        self._programs(form, devices)
         form.add("识别语言", self._combo("asr.languages", LANGUAGES))
         live = QCheckBox("说话过程中就显示字幕（关闭后只在一句话说完时显示）")
         live.setChecked(asr.partial_interval > 0)
@@ -821,6 +821,75 @@ class SettingsWindow(QWidget):
         form.add("断句停顿", self._spin("vad.min_silence", 0.2, 1.0, 0.05, " 秒"),
                  "安静多久算一句话说完。越短字幕出得越快，但更容易把一句话切碎。")
         return form
+
+    def _programs(self, form, devices: QComboBox) -> None:
+        """Which programs are listened to: all, one, or all but one."""
+        audio = self.cfg.audio
+        mode = QComboBox()
+        for text, value in (("全部程序", ""), ("只听一个程序", "only"), ("除一个程序以外的全部程序", "except")):
+            mode.addItem(text, value)
+        mode.setCurrentIndex(mode.findData(audio.app_mode if audio.app else ""))
+        mode.setMinimumWidth(260)
+        apps = QComboBox()
+        apps.setEditable(True)  # a program that is not making sound right now can be typed
+        apps.setMinimumWidth(360)
+        apps.lineEdit().setPlaceholderText("程序文件名，例如 KOOK.exe")
+
+        def fill() -> None:
+            from . import apploop
+
+            apps.blockSignals(True)
+            apps.clear()
+            names = []
+            try:
+                names = [name for name, _now in apploop.playing()]
+            except Exception as e:
+                apps.setToolTip(f"无法列出正在发声的程序：{e}")
+            for name in names:
+                apps.addItem(apploop.label(name), name)
+            for name in (audio.app, "RiotClientServices.exe"):
+                if name and name.lower() not in (n.lower() for n in names):
+                    apps.addItem(f"{apploop.label(name)} · 现在没有声音", name)
+                    names.append(name)
+            index = apps.findData(audio.app) if audio.app else -1
+            apps.setCurrentIndex(index)
+            if index < 0:
+                apps.setEditText(audio.app)
+            apps.blockSignals(False)
+
+        def chosen() -> str:
+            i = apps.currentIndex()
+            if i >= 0 and apps.itemText(i) == apps.currentText():
+                return apps.itemData(i)
+            return apps.currentText().strip()
+
+        def apply() -> None:
+            how, name = mode.currentData(), chosen()
+            if how and name:
+                self.set("audio.app_mode", how)
+                self.set("audio.app", name)
+            elif not how:
+                self.set("audio.app", "")
+            apps.setEnabled(bool(how) and not self.host.from_file)
+            devices.setEnabled(not how and not self.host.from_file)
+
+        fill()
+        mode.currentIndexChanged.connect(lambda _i: apply())
+        apps.activated.connect(lambda _i: apply())
+        apps.lineEdit().editingFinished.connect(apply)
+        mode.setEnabled(not self.host.from_file)
+        apps.setEnabled(bool(mode.currentData()) and not self.host.from_file)
+        devices.setEnabled(not mode.currentData() and not self.host.from_file)
+        form.add("听哪些程序", mode,
+                 "如果你和朋友另外开了语音通话（QQ、KOOK、Discord 等）用中文聊天，选「除一个程序以外」再选中通话软件，"
+                 "字幕就不会去翻译你们的聊天。只听某个程序时，上面的声音来源不起作用。")
+        row = QHBoxLayout()
+        row.addWidget(apps)
+        row.addWidget(button("刷新", on_click=fill))
+        row.addStretch(1)
+        form.add("程序", row,
+                 "列表里是现在打开了声音的程序，先让它出声再点「刷新」。程序没在运行时，字幕会等它启动。"
+                 "VALORANT 的队伍语音据说由 Riot 客户端（RiotClientServices.exe）播放，还没有在对局里验证过。")
 
     def _translate(self) -> QWidget:
         form, backend = Form(), self.cfg.translate.backend
