@@ -1019,12 +1019,10 @@ class SettingsWindow(QWidget):
         changed()
         return form
 
-    def _compose(self) -> QWidget:
-        form, c = Form(), self.cfg.compose
-        form.add("翻译成", self._combo("compose.target", [("ja", "日语"), ("en", "English")]))
-        keys = QLineEdit(c.hotkey)
-        keys.setPlaceholderText("例如 ctrl+alt+t；留空则不注册")
-        keys_hint = label("", "hint", wrap=True)
+    def _shortcut(self, form, name: str, title: str, placeholder: str, hint: str = "") -> None:
+        keys = QLineEdit(self.value(name))
+        keys.setPlaceholderText(placeholder)
+        keys_hint = label(hint, "hint", wrap=True)
 
         def set_keys() -> None:
             text = keys.text().strip().lower()
@@ -1035,12 +1033,55 @@ class SettingsWindow(QWidget):
                 keys_hint.setText("没看懂这个快捷键。写法：ctrl+alt+t、ctrl+shift+f8（至少一个 ctrl / alt / shift / win 加一个键）。")
                 keys_hint.setStyleSheet(f"color: {WARN};")
                 return
-            keys_hint.setText("")
-            self.set("compose.hotkey", text)
+            keys_hint.setText(hint)
+            keys_hint.setStyleSheet("")
+            self.set(name, text)
 
         keys.editingFinished.connect(set_keys)
-        form.add("打开输入框的快捷键", keys)
+        form.add(title, keys)
         form.grid.addWidget(keys_hint, form._row - 2, 1)
+
+    def _microphones(self) -> QHBoxLayout:
+        mics = QComboBox()
+        mics.setMinimumWidth(360)
+
+        def fill() -> None:
+            mics.blockSignals(True)
+            mics.clear()
+            mics.addItem("跟随系统默认麦克风", "")
+            try:
+                from .audio import list_devices
+
+                names = [name for kind, name, _default in list_devices() if kind == "mic"]
+            except Exception as e:
+                names = []
+                mics.setToolTip(f"无法列出麦克风：{e}")
+            current = self.cfg.compose.mic
+            for name in names:
+                mics.addItem(name, name)
+            match = next((n for n in names if current and current.lower() in n.lower()), "")
+            if current and not match:
+                mics.addItem(f"{current}（未连接）", current)
+            mics.setCurrentIndex(mics.findData(match or current))
+            mics.blockSignals(False)
+
+        fill()
+        mics.currentIndexChanged.connect(lambda _i: self.set("compose.mic", mics.currentData()))
+        row = QHBoxLayout()
+        row.addWidget(mics)
+        row.addWidget(button("刷新", on_click=fill))
+        row.addStretch(1)
+        return row
+
+    def _compose(self) -> QWidget:
+        form, c = Form(), self.cfg.compose
+        form.add("翻译成", self._combo("compose.target", [("ja", "日语"), ("en", "English")]))
+        self._shortcut(form, "compose.hotkey", "打开输入框的快捷键", "例如 ctrl+alt+t；留空则不注册")
+        self._shortcut(form, "compose.voice_hotkey", "说话发消息的快捷键", "例如 ctrl+alt+v；留空则不注册",
+                       "按下后直接说中文，说完停一下，自动翻译并复制。在输入框里按 Tab 也能说话，"
+                       "那样识别出的中文会先留在框里让你检查。不要用游戏里的按键说话键：队友会听到你说中文。")
+        form.add("麦克风", self._microphones(),
+                 "如果游戏里的语音设成「开放麦克风」，你对着麦克风说的中文队友也会听到；用按键说话就不会。")
 
         online = [self._line("compose.base_url", "https://api.deepseek.com"),
                   self._line("compose.model", "deepseek-flash"),

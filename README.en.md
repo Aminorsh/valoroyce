@@ -98,6 +98,12 @@ To type to your team: choose "发消息（中文 → 日语 / 英语）…" in t
 - The program only copies. It never types into the game or sends anything for you.
 - Machine translation does best with short, direct sentences. Jokes and slang tend to go wrong.
 
+**Speak instead of typing**: press **Ctrl+Alt+V** (or "说话发消息" in the tray menu), say it in Chinese and pause: it is recognised, translated and copied at once. To check the recognised text first, press **Tab** in the box (or click 🎤) and speak: the Chinese is inserted at the cursor, and Enter translates it.
+
+- Recognition uses the captions' recogniser (Whisper works best). Agent, map and callout names are put right by how they sound (木蝶 → 暮蝶, 回房 → 回防).
+- Pick the microphone on the 发消息 page of the settings window; the system default is used otherwise.
+- Do not speak Chinese with the game's push-to-talk key; with open mic in the game, teammates hear it too.
+
 #### Better messages: a separate model for the message box (optional)
 
 By default, messages use the same small local model as the captions: fully offline, but stiff with casual speech and slang. You can give the message box a stronger model of its own. **Captions are not affected** (for captions, see the next section). Add one block to `config.toml`:
@@ -272,9 +278,10 @@ Everything is in `src/valoroyce/`. Each stage lives in one file and knows nothin
 | `translate.py` | Translation backends, the prompt formats, and the llama.cpp child process |
 | `pipeline.py` | Threads and queues tying the stages together; decides which captions are still worth translating |
 | `overlay.py` | The caption window, the tray menu, and restarting the pipeline when a menu choice changes |
-| `compose.py` | The message box: Chinese in, Japanese or English out to the clipboard |
+| `compose.py` | The message box: Chinese in (typed or said), Japanese or English out to the clipboard |
+| `voice.py` | A spoken message: one sentence from the microphone, recognised as Chinese, names put right by sound |
 | `record.py` | Opt-in recording for problem reports: the audio as heard plus the captions shown |
-| `hotkey.py` | The system-wide shortcut that opens the message box (Windows) |
+| `hotkey.py` | The system-wide shortcuts that open the message box, to type or to speak (Windows) |
 | `settings.py` | The settings window: models page, captions, sound, translation, messages |
 | `catalog.py` | The models and runtimes a user can download, switch off or remove; what a PC needs |
 | `state.py` | Choices made in the settings window and the tray menu, remembered between runs |

@@ -216,7 +216,7 @@ class _WaveFormat(Structure):
 _ole32 = None
 
 
-def _com_init() -> None:
+def com_init() -> None:
     """Join the multi-threaded apartment on this thread (harmless when the
     thread is in one already)."""
     global _ole32
@@ -277,7 +277,7 @@ class Loopback:
     BUFFER_SECONDS = 2.0
 
     def __init__(self, pid: int, exclude: bool = False):
-        _com_init()
+        com_init()
         self.pid, self.exclude = pid, exclude
         self.client = self.capture = c_void_p()
         self.event = None
@@ -346,7 +346,7 @@ class Loopback:
 def playing() -> list[tuple[str, bool]]:
     """Programs that have sound open on any output device, as (file name,
     sounding now). Our own process and Windows' system sounds are left out."""
-    _com_init()
+    com_init()
     names = {p.pid: p.name for p in processes()}
     found: dict[str, bool] = {}
     enum = c_void_p()

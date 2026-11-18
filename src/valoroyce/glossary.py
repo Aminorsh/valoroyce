@@ -272,3 +272,42 @@ class Glossary:
         for hit in sorted(hits, key=lambda h: -len(h.source)):
             text = text.replace(hit.source, hit.zh)
         return text
+
+    def spoken_zh(self, text: str) -> str:
+        """Chinese the player said, as the recogniser wrote it, with names put
+        right: a run of characters that sounds exactly like a name or a
+        callout, tones included, is replaced by it (目蝶 / 木蝶 -> 暮蝶,
+        一觉 -> 壹决, 回房 -> 回防). Each written character may stand for any
+        of its readings; tones keep ordinary words apart (起了 qǐ le is not
+        奇乐 qí lè). One-character terms are left alone. Without pypinyin, the
+        text is returned as is."""
+        try:
+            from pypinyin import Style, lazy_pinyin, pinyin
+        except ImportError:
+            return text
+        names = getattr(self, "_spoken_names", None)
+        if names is None:
+            names = self._spoken_names = sorted(
+                ((tuple(lazy_pinyin(t.zh, style=Style.TONE3, neutral_tone_with_five=True)), t.zh)
+                 for t in self.terms if len(t.zh) >= 2 and _all_han(t.zh)),
+                key=lambda pair: -len(pair[0]))
+        chars = list(text)
+        readings = [set(r) if _all_han(c) else set()
+                    for c, r in zip(chars, pinyin(chars, style=Style.TONE3, heteronym=True,
+                                                  neutral_tone_with_five=True))]
+        i, out = 0, []
+        while i < len(chars):
+            for sound, name in names:
+                n = len(sound)
+                if i + n <= len(chars) and all(sound[k] in readings[i + k] for k in range(n)):
+                    out.append(name)
+                    i += n
+                    break
+            else:
+                out.append(chars[i])
+                i += 1
+        return "".join(out)
+
+
+def _all_han(text: str) -> bool:
+    return bool(text) and all("一" <= c <= "鿿" or "㐀" <= c <= "䶿" for c in text)

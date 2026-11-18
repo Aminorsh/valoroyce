@@ -1,4 +1,7 @@
-"""The message box: type Chinese, get Japanese or English on the clipboard.
+"""The message box: type or say Chinese, get Japanese or English on the clipboard.
+
+Said with the voice shortcut, the message is translated and copied at once;
+said with Tab (or the microphone button) in the box, it waits to be checked.
 
 The result is only copied. Pasting it into the game's chat is left to the
 player; this program never sends keystrokes to the game.
@@ -8,10 +11,10 @@ from __future__ import annotations
 
 import threading
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QEvent, Qt, Signal
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (
-    QButtonGroup, QHBoxLayout, QLabel, QLineEdit, QRadioButton, QVBoxLayout, QWidget,
+    QButtonGroup, QHBoxLayout, QLabel, QLineEdit, QPushButton, QRadioButton, QVBoxLayout, QWidget,
 )
 
 from . import state
@@ -26,15 +29,26 @@ QLineEdit { background: #1F2B36; color: #FFFFFF; border: 1px solid #364452;
             border-radius: 6px; padding: 8px 10px; font-size: 16px; }
 QLineEdit:focus { border-color: #FF4655; }
 QRadioButton { color: #D5DBE1; font-size: 13px; spacing: 6px; }
+QPushButton#mic { background: #1F2B36; color: #FFFFFF; border: 1px solid #364452;
+                  border-radius: 6px; font-size: 16px; min-width: 40px; min-height: 36px; }
+QPushButton#mic:checked { background: #FF4655; border-color: #FF4655; }
 """
 
 
 class ComposeWindow(QWidget):
     _finished = Signal(int, str, str, bool)  # request number, result, error, used the fallback
+    _heard_state = Signal(int, str)  # listening number, progress text
+    _heard = Signal(int, str, str)   # listening number, text, error
 
-    def __init__(self, get_translator, target: str = "ja"):
+    def __init__(self, get_translator, target: str = "ja", voice=None):
         super().__init__()
         self.get_translator = get_translator
+        # voice(on_state, on_done) starts listening and returns the listening;
+        # None: no spoken messages.
+        self.voice = voice
+        self._listening = None
+        self._heard_number = 0
+        self._translate_heard = False
         self.target = target if target in dict(LANGUAGES) else "ja"
         self._request = 0
         self.setObjectName("compose")
@@ -46,6 +60,17 @@ class ComposeWindow(QWidget):
         self.input = QLineEdit()
         self.input.setPlaceholderText("输入中文，按回车翻译")
         self.input.returnPressed.connect(self.translate)
+        self.input.installEventFilter(self)  # Tab: talk instead of moving the focus
+        self.mic = QPushButton("🎤")
+        self.mic.setObjectName("mic")
+        self.mic.setCheckable(True)
+        self.mic.setToolTip("说中文（Tab）：识别后先在框里检查，再按回车翻译")
+        self.mic.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.mic.clicked.connect(lambda: self.listen(translate_after=False))
+        self.mic.setVisible(voice is not None)
+        line = QHBoxLayout()
+        line.addWidget(self.input, 1)
+        line.addWidget(self.mic)
 
         langs = QHBoxLayout()
         langs.addWidget(QLabel("翻译成"))
@@ -63,16 +88,19 @@ class ComposeWindow(QWidget):
         self.result.setObjectName("result")
         self.result.setWordWrap(True)
         self.result.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        self.status = QLabel("回车翻译 · Esc 关闭")
+        self.hint = "回车翻译 · Tab 说话 · Esc 关闭" if voice is not None else "回车翻译 · Esc 关闭"
+        self.status = QLabel(self.hint)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 14, 16, 12)
         layout.setSpacing(8)
-        layout.addWidget(self.input)
+        layout.addLayout(line)
         layout.addLayout(langs)
         layout.addWidget(self.result)
         layout.addWidget(self.status)
         self._finished.connect(self._on_finished)
+        self._heard_state.connect(self._on_heard_state)
+        self._heard.connect(self._on_heard)
 
     def set_target(self, code: str) -> None:
         """Choose the language from outside the box (the settings window)."""
@@ -94,9 +122,74 @@ class ComposeWindow(QWidget):
 
     def keyPressEvent(self, e) -> None:
         if e.key() == Qt.Key.Key_Escape:
+            self.stop_listening()
             self.hide()
         else:
             super().keyPressEvent(e)
+
+    def eventFilter(self, obj, e) -> bool:
+        if obj is self.input and e.type() == QEvent.Type.KeyPress and e.key() == Qt.Key.Key_Tab:
+            if self.voice is not None:
+                self.listen(translate_after=False)
+            return True
+        return super().eventFilter(obj, e)
+
+    # -- speaking instead of typing ---------------------------------------------
+
+    def open_and_listen(self) -> None:
+        """The voice shortcut: listen, then translate and copy at once.
+        Pressed again while listening, it ends the sentence."""
+        if self.listening:
+            self.stop_listening()
+            return
+        self.open()
+        self.listen(translate_after=True)
+
+    @property
+    def listening(self) -> bool:
+        return self._listening is not None and self._listening.active
+
+    def stop_listening(self) -> None:
+        if self.listening:
+            self._listening.stop()
+
+    def listen(self, translate_after: bool) -> None:
+        if self.listening:  # the second press ends the sentence
+            self._listening.stop()
+            return
+        self._heard_number += 1
+        number = self._heard_number
+        self._translate_heard = translate_after
+        try:
+            self._listening = self.voice(lambda text: self._heard_state.emit(number, text),
+                                         lambda text, error: self._heard.emit(number, text, error))
+        except Exception as e:
+            self._listening = None
+            self.mic.setChecked(False)
+            self.status.setText(str(e))
+            return
+        self.mic.setChecked(True)
+        self.status.setStyleSheet("color: #FF4655;")  # red while the microphone is open
+
+    def _on_heard_state(self, number: int, text: str) -> None:
+        if number == self._heard_number:
+            self.status.setText(text)
+
+    def _on_heard(self, number: int, text: str, error: str) -> None:
+        if number != self._heard_number:
+            return
+        self.mic.setChecked(False)
+        self.status.setStyleSheet("")
+        if error:
+            self.status.setText(error)
+            return
+        if self._translate_heard:
+            self.input.setText(text)
+            self.translate()
+        else:  # at the cursor: part typed, part said
+            self.input.insert(text)
+            self.input.setFocus()
+            self.status.setText("检查一下，没问题按回车翻译")
 
     def translate(self) -> None:
         text = self.input.text().strip()

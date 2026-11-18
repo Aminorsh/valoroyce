@@ -236,8 +236,8 @@ class Controller(QObject):
         self._big_wanted = bool(cfg.compose.backend)
         self._big_loading = False
         self._big_settings = 0  # counts changes, so a model loaded for old settings is dropped
-        self.compose = ComposeWindow(self._compose_translator, cfg.compose.target)
-        self.hotkey = None
+        self.compose = ComposeWindow(self._compose_translator, cfg.compose.target, voice=self._listen)
+        self.hotkey = self.voice_hotkey = None
         self._register_hotkey()
 
         self.tray = QSystemTrayIcon(app_icon(), app)
@@ -265,6 +265,9 @@ class Controller(QObject):
         self.send = QAction(self._send_label(), m)
         self.send.triggered.connect(self.open_compose)
         m.addAction(self.send)
+        self.speak = QAction(self._speak_label(), m)
+        self.speak.triggered.connect(self.speak_compose)
+        m.addAction(self.speak)
         settings = QAction("设置与模型…", m)
         settings.triggered.connect(lambda _=False: self.open_settings())
         m.addAction(settings)
@@ -346,20 +349,43 @@ class Controller(QObject):
             label += "\t" + self.cfg.compose.hotkey.title()
         return label
 
+    def _speak_label(self) -> str:
+        label = "说话发消息（说中文，自动翻译并复制）"
+        if self.voice_hotkey and self.voice_hotkey.registered:
+            label += "\t" + self.cfg.compose.voice_hotkey.title()
+        return label
+
     def _register_hotkey(self) -> None:
-        if self.hotkey:
-            self.hotkey.release()
-            self.app.removeNativeEventFilter(self.hotkey)
-            self.hotkey = None
-        if self.cfg.compose.hotkey:
+        """Both shortcuts, anew: the typing one and the voice one."""
+        for old in (self.hotkey, self.voice_hotkey):
+            if old:
+                old.release()
+                self.app.removeNativeEventFilter(old)
+        self.hotkey = self.voice_hotkey = None
+        for attr, spec, action, ident in (("hotkey", self.cfg.compose.hotkey, self.open_compose, 0x5641),
+                                          ("voice_hotkey", self.cfg.compose.voice_hotkey, self.speak_compose, 0x5642)):
+            if not spec:
+                continue
             try:
-                self.hotkey = GlobalHotkey(self.app, self.cfg.compose.hotkey, self.open_compose)
+                setattr(self, attr, GlobalHotkey(self.app, spec, action, ident))
             except Exception as e:  # a shortcut is a convenience; never block start-up
                 print(f"warning: shortcut not available: {e}", file=sys.stderr)
 
     def open_compose(self) -> None:
         self._compose_translator()  # start loading the message model, if any
         self.compose.open()
+
+    def speak_compose(self) -> None:
+        self._compose_translator()
+        self.compose.open_and_listen()
+
+    def _listen(self, on_state, on_done):
+        """Start listening for a spoken message (the message box asks)."""
+        if self.recognizer is None:
+            raise RuntimeError("语音识别模型还在加载，请稍候再说")
+        from .voice import listen
+
+        return listen(self.cfg, self.recognizer, on_state, on_done, self.glossary)
 
     def _compose_translator(self):
         """Translator for outgoing messages; None while their own model loads."""
@@ -406,9 +432,12 @@ class Controller(QObject):
                 self.window.notice("字幕预览 · 这是一条示例字幕", 3.0)
         elif name == "compose.target":
             self.compose.set_target(self.cfg.compose.target)
-        elif name == "compose.hotkey":
+        elif name in ("compose.hotkey", "compose.voice_hotkey"):
             self._register_hotkey()
             self.send.setText(self._send_label())
+            self.speak.setText(self._speak_label())
+        elif name == "compose.mic":
+            pass  # read when listening starts
         elif part == "compose":  # another model for messages: loaded when the next one is typed
             old, self._big = self._big, None
             self._big_settings += 1
@@ -636,6 +665,9 @@ class Controller(QObject):
             self._big.close()
         if self.hotkey:
             self.hotkey.release()
+        if self.voice_hotkey:
+            self.voice_hotkey.release()
+        self.compose.stop_listening()
         if self.pipeline:
             self.pipeline.stop()
             self.pipeline.join(3.0)  # the process ends right after this

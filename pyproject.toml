@@ -8,6 +8,8 @@ requires-python = ">=3.11"
 dependencies = [
     "numpy>=1.26",
     "sherpa-onnx>=1.12",
+    # Chinese said for a message: names put right by how they sound.
+    "pypinyin>=0.53",
 ]
 
 [project.optional-dependencies]

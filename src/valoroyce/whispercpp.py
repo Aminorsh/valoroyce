@@ -27,7 +27,8 @@ from .config import SAMPLE_RATE, AsrConfig
 
 RUNTIME_DIR = "whisper-cpp"
 SERVER = "whisper-server.exe" if os.name == "nt" else "whisper-server"
-HOST, PORT = "127.0.0.1", 8178  # llama-server has 8177, an own caption model 8179
+# Captions use 8177 (llama-server), messages 8178, an own caption model 8179.
+HOST, PORT = "127.0.0.1", 8180
 
 
 def find_server(models: Path) -> Path | None:
@@ -163,25 +164,35 @@ class WhisperCppRecognizer:
         # done now, while loading, not on the first thing a teammate says.
         self._ask(np.zeros(SAMPLE_RATE, dtype=np.float32), self.languages[0], len(self.languages) > 1)
 
-    def _ask(self, samples: np.ndarray, lang: str, probabilities: bool) -> dict:
-        return self.server.infer(samples, response_format="verbose_json", language=lang,
-                                 temperature="0.0", temperature_inc="0.0", suppress_nst=True,
-                                 no_language_probabilities=not probabilities)
+    def _ask(self, samples: np.ndarray, lang: str, probabilities: bool, prompt: str = "") -> dict:
+        fields = dict(response_format="verbose_json", language=lang, temperature="0.0",
+                      temperature_inc="0.0", suppress_nst=True, no_language_probabilities=not probabilities)
+        if prompt:
+            fields["prompt"] = prompt
+        return self.server.infer(samples, **fields)
 
-    def transcribe(self, samples: np.ndarray):
-        from .speech import _CREDITS, MADE_UP_LOGPROB, MADE_UP_REPETITION, OTHER_LANGUAGE, Piece, Transcript, join
+    def transcribe(self, samples: np.ndarray, language: str = "", prompt: str = ""):
+        """What was said. `language` given: recognised as that language only;
+        `prompt`: text that comes before the audio, which steers the words.
+        The server takes one request at a time, so captions and spoken
+        messages can share it."""
+        from .speech import (_CREDITS, LANGUAGE_PROMPT, MADE_UP_LOGPROB, MADE_UP_REPETITION, OTHER_LANGUAGE,
+                             Piece, Transcript, join)
 
-        lang = self.languages[0]
-        reply = self._ask(samples, lang, probabilities=len(self.languages) > 1)
+        lang = language or self.languages[0]
+        ask_others = not language and len(self.languages) > 1
+        reply = self._ask(samples, lang, ask_others, prompt or LANGUAGE_PROMPT.get(language, ""))
         likely = reply.get("language_probabilities") or {}
-        if len(self.languages) > 1:
+        if ask_others:
             other = max(self.languages[1:], key=lambda code: likely.get(code, 0.0))
             if likely.get(other, 0.0) >= OTHER_LANGUAGE:
                 lang = other
                 reply = self._ask(samples, lang, probabilities=False)
         pieces = []
         for s in reply.get("segments", []):
-            text = (s.get("text") or "").strip()
+            # Whisper writes text as bytes and may stop inside a character
+            # (seen: the first byte of 。 alone); the server sends that as U+FFFD.
+            text = (s.get("text") or "").replace("�", "").strip()
             if s.get("avg_logprob", 0.0) < MADE_UP_LOGPROB or compression_ratio(text) > MADE_UP_REPETITION:
                 continue
             if text and not _CREDITS.search(text):

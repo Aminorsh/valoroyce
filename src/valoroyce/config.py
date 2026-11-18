@@ -175,6 +175,13 @@ class ComposeConfig:
     target: str = "ja"
     # System-wide shortcut that opens the message box (Windows). "" = none.
     hotkey: str = "ctrl+alt+t"
+    # Shortcut that opens the box and listens: say the message in Chinese, it
+    # is translated and copied at once. "" = none. In the box, Tab listens too
+    # and leaves the text to check before Enter.
+    voice_hotkey: str = "ctrl+alt+v"
+    # Microphone for spoken messages: part of its name (see `valoroyce
+    # devices`). Empty = the system's default microphone.
+    mic: str = ""
     # Which model writes your messages. Captions are not affected.
     #   ""        the caption model (nothing extra to set up)
     #   "llama"   a second local model, `model_file` inside models_dir, started

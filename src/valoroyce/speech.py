@@ -16,6 +16,7 @@ from __future__ import annotations
 import os
 import re
 import sys
+import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -166,6 +167,8 @@ class Recognizer:
         self._model = require(model_dir / "model.int8.onnx")
         self._tokens = require(model_dir / "tokens.txt")
         self._forced = None
+        self._pinned: dict[str, object] = {}  # recognisers asked for one language
+        self._lock = threading.Lock()  # captions and spoken messages share it
         # One expected language: pin it. Several: let the model pick, and keep a
         # pinned recogniser for when it picks something we do not expect.
         if len(self.languages) == 1:
@@ -192,7 +195,19 @@ class Recognizer:
         m = _LANG_TAG.search(result.lang or "")
         return Transcript(result.text.strip(), m.group(1) if m else "")
 
-    def transcribe(self, samples: np.ndarray) -> Transcript:
+    def transcribe(self, samples: np.ndarray, language: str = "", prompt: str = "") -> Transcript:
+        """What was said. `language` given: recognised as that language only.
+        SenseVoice takes no prompt."""
+        with self._lock:
+            if language:
+                if language not in self._pinned:
+                    self._pinned[language] = self._build(language)
+                out = self._decode(self._pinned[language], samples)
+                out.lang = language
+                return out
+            return self._expected(samples)
+
+    def _expected(self, samples: np.ndarray) -> Transcript:
         out = self._decode(self._main, samples)
         if len(self.languages) == 1:
             out.lang = self.languages[0]
@@ -224,6 +239,10 @@ _CREDITS = re.compile(
 # language is used unless another one is this probable. Measured on a Japanese
 # match: noise reached 0.84 for English, clean English speech gives 1.00.
 OTHER_LANGUAGE = 0.9
+# Whisper writes Chinese in traditional characters about as often as in
+# simplified ones; a sentence in simplified characters before the audio
+# steers it to simplified.
+LANGUAGE_PROMPT = {"zh": "以下是普通话的句子。"}
 
 
 def _nvidia_libraries() -> None:
@@ -282,6 +301,7 @@ class WhisperRecognizer:
 
         self._model = Model(str(models / cfg.whisper_model), device="cuda",
                             compute_type=cfg.whisper_compute)
+        self._lock = threading.Lock()  # captions and spoken messages share it
 
     def _language(self, samples: np.ndarray) -> str:
         from faster_whisper.audio import pad_or_trim
@@ -296,12 +316,19 @@ class WhisperRecognizer:
         other = max(self.languages[1:], key=lambda code: likely.get(code, 0.0))
         return other if likely.get(other, 0.0) >= OTHER_LANGUAGE else self.languages[0]
 
-    def transcribe(self, samples: np.ndarray) -> Transcript:
-        lang = self._language(samples) if len(self.languages) > 1 else self.languages[0]
+    def transcribe(self, samples: np.ndarray, language: str = "", prompt: str = "") -> Transcript:
+        """What was said. `language` given: recognised as that language only.
+        `prompt`: text that comes before the audio, which steers the words."""
+        with self._lock:
+            return self._transcribe(samples, language, prompt)
+
+    def _transcribe(self, samples: np.ndarray, language: str, prompt: str = "") -> Transcript:
+        lang = language or (self._language(samples) if len(self.languages) > 1 else self.languages[0])
         segments, _ = self._model.transcribe(
             samples, language=lang, beam_size=1,
             temperature=0.0,  # no second tries: a caption cannot wait for them
             condition_on_previous_text=False, vad_filter=False,
+            initial_prompt=prompt or LANGUAGE_PROMPT.get(language),
         )
         pieces = []
         for s in segments:  # decoding happens here, phrase by phrase

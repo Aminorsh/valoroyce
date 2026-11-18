@@ -110,3 +110,19 @@ def test_real_server_recognises_japanese_and_english():
     finally:
         r.close()
     assert r.server is None
+
+
+def test_every_local_server_has_a_port_of_its_own():
+    from urllib.parse import urlparse
+
+    from valoroyce.settings import CUSTOM_PORT
+
+    cfg = Config()
+    ports = [urlparse(cfg.translate.base_url).port, urlparse(cfg.compose.base_url).port,
+             urlparse(CUSTOM_PORT).port, whispercpp.PORT]
+    assert len(set(ports)) == len(ports), ports
+
+
+def test_a_character_cut_in_half_is_dropped():
+    reply = {"segments": [segment("别买枪�")]}
+    assert recognizer({"zh": reply}).transcribe(np.zeros(SR, dtype=np.float32), language="zh").text == "别买枪"

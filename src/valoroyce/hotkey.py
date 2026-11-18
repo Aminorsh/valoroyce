@@ -14,7 +14,7 @@ from PySide6.QtCore import QAbstractNativeEventFilter
 _MODS = {"alt": 0x1, "ctrl": 0x2, "control": 0x2, "shift": 0x4, "win": 0x8}
 _MOD_NOREPEAT = 0x4000
 _WM_HOTKEY = 0x0312
-_ID = 0x5641  # arbitrary, unique within this process
+_ID = 0x5641  # arbitrary; each shortcut of this process needs its own
 
 
 def parse(spec: str) -> tuple[int, int]:
@@ -37,9 +37,10 @@ def parse(spec: str) -> tuple[int, int]:
 
 
 class GlobalHotkey(QAbstractNativeEventFilter):
-    def __init__(self, app, spec: str, callback):
+    def __init__(self, app, spec: str, callback, ident: int = _ID):
         super().__init__()
         self.callback = callback
+        self._id = ident
         self.registered = False
         mods, key = parse(spec)
         if sys.platform != "win32":
@@ -48,7 +49,7 @@ class GlobalHotkey(QAbstractNativeEventFilter):
 
         self._user32 = ctypes.windll.user32
         # Must run on the thread that owns Qt's message loop.
-        self.registered = bool(self._user32.RegisterHotKey(None, _ID, mods | _MOD_NOREPEAT, key))
+        self.registered = bool(self._user32.RegisterHotKey(None, self._id, mods | _MOD_NOREPEAT, key))
         if self.registered:
             app.installNativeEventFilter(self)
 
@@ -57,12 +58,12 @@ class GlobalHotkey(QAbstractNativeEventFilter):
             from ctypes import wintypes
 
             msg = wintypes.MSG.from_address(int(message))
-            if msg.message == _WM_HOTKEY and msg.wParam == _ID:
+            if msg.message == _WM_HOTKEY and msg.wParam == self._id:
                 self.callback()
                 return True, 0
         return False, 0
 
     def release(self) -> None:
         if self.registered:
-            self._user32.UnregisterHotKey(None, _ID)
+            self._user32.UnregisterHotKey(None, self._id)
             self.registered = False
