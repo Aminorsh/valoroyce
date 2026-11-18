@@ -72,10 +72,13 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           tag="whisper.cpp-${WHISPER_VERSION}-vulkan"
+          sha256sum ./*.zip
+          # A published build is never replaced: the program checks its SHA-256,
+          # and two builds of the same source differ byte for byte. To publish
+          # another build, change WHISPER_VERSION (and the checksum in setup.py).
           if gh release view "$tag" >/dev/null 2>&1; then
-            gh release upload "$tag" ./*.zip --clobber
+            echo "release $tag exists; left as it is"
           else
             gh release create "$tag" ./*.zip --prerelease --target "$GITHUB_SHA" --title "whisper.cpp ${WHISPER_VERSION}, Vulkan, Windows x64" \
-              --notes "Runtime for speech recognition on AMD and Intel graphics cards, fetched by Valoroyce. Built from ggml-org/whisper.cpp ${WHISPER_VERSION} (MIT licence) by .github/workflows/whisper-runtime.yml; not a release of Valoroyce."
+              --notes "Runtime for speech recognition on graphics cards of any maker, fetched by Valoroyce. Built from ggml-org/whisper.cpp ${WHISPER_VERSION} (MIT licence) by .github/workflows/whisper-runtime.yml; not a release of Valoroyce."
           fi
-          sha256sum ./*.zip

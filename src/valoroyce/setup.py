@@ -107,8 +107,8 @@ WHISPERCPP_RUNTIME = Asset(
     f"downloads/{_WHISPERCPP_ZIP}",
     {"global": [f"https://github.com/Aminorsh/valoroyce/releases/download/"
                 f"whisper.cpp-{WHISPERCPP_VERSION}-vulkan/{_WHISPERCPP_ZIP}"]},
-    sha256="bfdc3dd2ac30292ff8abf1b861ebc1276051787368dc5942662f816e0cc2c388",
-    size=14_841_322, extract_to=WHISPERCPP_DIR, note="whisper.cpp runtime (Vulkan)",
+    sha256="1694dca606a8f0dbee21440021ed73f1931a541ec35073e9c42f7cb26af3da7e",
+    size=14_841_320, extract_to=WHISPERCPP_DIR, note="whisper.cpp runtime (Vulkan)",
 )
 WHISPERCPP_MODEL = Asset(
     "whisper-ggml/ggml-large-v3-turbo-q8_0.bin",
