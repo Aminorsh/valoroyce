@@ -383,6 +383,17 @@ def test_a_finished_download_starts_captions_and_a_failed_one_says_why(window, m
     assert host.pending == {"asr"} and host.calls == ["resume"]
 
 
+def test_a_downloaded_recogniser_that_was_switched_off_goes_first(window):
+    page, cfg = window.models, window.host.cfg
+    window.set("asr.order", ["whisper", "sensevoice"])  # saved by an older version
+    page.jobs["whispercpp"] = threading.Event()
+    page._on_done("whispercpp", "", False)
+    assert cfg.asr.order == ["whispercpp", "whisper", "sensevoice"]
+    page.jobs["sensevoice"] = threading.Event()
+    page._on_done("sensevoice", "", False)  # already in the order: stays where it is
+    assert cfg.asr.order == ["whispercpp", "whisper", "sensevoice"]
+
+
 def test_every_page_builds_and_the_window_can_be_reopened(window):
     from valoroyce.settings import PAGES
 

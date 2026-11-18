@@ -489,8 +489,12 @@ class ModelsPage(QWidget):
             card.say(f"下载失败：{error}", WARN)
         else:
             card.say("")
-            if catalog.ITEMS[item_id].role == "asr" and host.pipeline is not None:
-                host.pending.add("asr")  # a better recogniser may be available now
+            if catalog.ITEMS[item_id].role == "asr":
+                order = self.order()
+                if item_id not in order:  # downloaded on purpose but switched off: use it
+                    self._set_order([item_id, *order])
+                if host.pipeline is not None:
+                    host.pending.add("asr")  # a better recogniser may be available now
         self.refresh()
         if not self.jobs and host.pipeline is None and not host.busy:
             host.resume()  # starts captions once nothing is missing
